@@ -6,10 +6,13 @@ import com.earth2me.essentials.craftbukkit.Inventories;
 import com.earth2me.essentials.textreader.IText;
 import com.earth2me.essentials.textreader.KeywordReplacer;
 import com.earth2me.essentials.textreader.SimpleTextInput;
+import com.earth2me.essentials.utils.AdventureUtil;
 import com.earth2me.essentials.utils.DateUtil;
 import com.earth2me.essentials.utils.NumberUtil;
 import net.ess3.api.IEssentials;
+import net.ess3.api.TranslatableException;
 import net.ess3.api.events.KitClaimEvent;
+import net.ess3.provider.SerializationProvider;
 import net.essentialsx.api.v2.events.KitPreExpandItemsEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -23,9 +26,10 @@ import java.util.Calendar;
 import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.logging.Level;
 
-import static com.earth2me.essentials.I18n.tl;
+import static com.earth2me.essentials.I18n.tlLiteral;
 
 public class Kit {
     final IEssentials ess;
@@ -40,7 +44,7 @@ public class Kit {
         this.charge = new Trade("kit-" + kitName, new Trade("kit-kit", ess), ess);
 
         if (kit == null) {
-            throw new Exception(tl("kitNotFound"));
+            throw new TranslatableException("kitNotFound");
         }
     }
 
@@ -50,7 +54,7 @@ public class Kit {
 
     public void checkPerms(final User user) throws Exception {
         if (!user.isAuthorized("essentials.kits." + kitName)) {
-            throw new Exception(tl("noKitPermission", "essentials.kits." + kitName));
+            throw new TranslatableException("noKitPermission", "essentials.kits." + kitName);
         }
     }
 
@@ -59,10 +63,10 @@ public class Kit {
 
         if (nextUse == 0L) {
         } else if (nextUse < 0L) {
-            user.sendMessage(tl("kitOnce"));
+            user.sendTl("kitOnce");
             throw new NoChargeException();
         } else {
-            user.sendMessage(tl("kitTimed", DateUtil.formatDateDiff(nextUse)));
+            user.sendTl("kitTimed", DateUtil.formatDateDiff(nextUse));
             throw new NoChargeException();
         }
     }
@@ -96,7 +100,7 @@ public class Kit {
             // Make sure delay is valid
             delay = kit.containsKey("delay") ? ((Number) kit.get("delay")).doubleValue() : 0.0d;
         } catch (final Exception e) {
-            throw new Exception(tl("kitError2"));
+            throw new TranslatableException("kitError2");
         }
 
         // When was the last kit used?
@@ -130,7 +134,7 @@ public class Kit {
 
     public List<String> getItems() throws Exception {
         if (kit == null) {
-            throw new Exception(tl("kitNotFound"));
+            throw new TranslatableException("kitNotFound");
         }
         try {
             final List<String> itemList = new ArrayList<>();
@@ -148,7 +152,7 @@ public class Kit {
             throw new Exception("Invalid item list");
         } catch (final Exception e) {
             ess.getLogger().log(Level.WARNING, "Error parsing kit " + kitName + ": " + e.getMessage());
-            throw new Exception(tl("kitError2"), e);
+            throw new TranslatableException(e,"kitError2");
         }
     }
 
@@ -171,10 +175,11 @@ public class Kit {
             final boolean allowUnsafe = ess.getSettings().allowUnsafeEnchantments();
             final boolean autoEquip = ess.getSettings().isKitAutoEquip();
             final List<ItemStack> itemList = new ArrayList<>();
+            final Map<Integer, ItemStack> itemsWithSlot = new HashMap<>();
             final List<String> commandQueue = new ArrayList<>();
             final List<String> moneyQueue = new ArrayList<>();
             final String currencySymbol = ess.getSettings().getCurrencySymbol().isEmpty() ? "$" : ess.getSettings().getCurrencySymbol();
-            for (final String kitItem : output.getLines()) {
+            for (String kitItem : output.getLines()) {
                 if (kitItem.startsWith("$") || kitItem.startsWith(currencySymbol)) {
                     moneyQueue.add(NumberUtil.sanitizeCurrencyString(kitItem, ess));
                     continue;
@@ -188,14 +193,25 @@ public class Kit {
                     continue;
                 }
 
+                int itemSlot = -1;
+                if (kitItem.startsWith("slot:")) {
+                    final int spaceIndex = kitItem.indexOf(" ");
+                    if (spaceIndex != -1) {
+                        final String slotStr = kitItem.substring("slot:".length(), spaceIndex);
+                        itemSlot = NumberUtil.isInt(slotStr) ? Integer.parseInt(slotStr) : -1;
+                        kitItem = kitItem.substring(spaceIndex + 1);
+                    }
+                }
+
                 final ItemStack stack;
+                final SerializationProvider serializationProvider = ess.provider(SerializationProvider.class);
 
                 if (kitItem.startsWith("@")) {
-                    if (ess.getSerializationProvider() == null) {
-                        ess.getLogger().log(Level.WARNING, tl("kitError3", kitName, user.getName()));
+                    if (serializationProvider == null) {
+                        ess.getLogger().log(Level.WARNING, AdventureUtil.miniToLegacy(tlLiteral("kitError3", kitName, user.getName())));
                         continue;
                     }
-                    stack = ess.getSerializationProvider().deserializeItem(Base64Coder.decodeLines(kitItem.substring(1)));
+                    stack = serializationProvider.deserializeItem(Base64Coder.decodeLines(kitItem.substring(1)));
                 } else {
                     final String[] parts = kitItem.split(" +");
                     final ItemStack parseStack = ess.getItemDb().get(parts[0], parts.length > 1 ? Integer.parseInt(parts[1]) : 1);
@@ -214,22 +230,35 @@ public class Kit {
                     stack = metaStack.getItemStack();
                 }
 
-                itemList.add(stack);
+                if (itemSlot == -1 || itemsWithSlot.containsKey(itemSlot)) {
+                    itemList.add(stack);
+                } else {
+                    itemsWithSlot.put(itemSlot, stack);
+                }
             }
 
             final int maxStackSize = user.isAuthorized("essentials.oversizedstacks") ? ess.getSettings().getOversizedStackSize() : 0;
             final boolean isDropItemsIfFull = ess.getSettings().isDropItemsIfFull();
 
-            final KitPreExpandItemsEvent itemsEvent = new KitPreExpandItemsEvent(user, kitName, itemList);
+            final List<ItemStack> totalItems = new ArrayList<>(itemList);
+            totalItems.addAll(itemsWithSlot.values());
+
+            final KitPreExpandItemsEvent itemsEvent = new KitPreExpandItemsEvent(user, kitName, totalItems);
             Bukkit.getPluginManager().callEvent(itemsEvent);
-
-            final ItemStack[] itemArray = itemList.toArray(new ItemStack[0]);
-
-            if (!isDropItemsIfFull && !Inventories.hasSpace(user.getBase(), maxStackSize, autoEquip, itemArray)) {
-                user.sendMessage(tl("kitInvFullNoDrop"));
+            final ItemStack[] totalItemsArray = totalItems.toArray(new ItemStack[0]);
+            if (!isDropItemsIfFull && !Inventories.hasSpace(user.getBase(), maxStackSize, autoEquip, totalItemsArray)) {
+                user.sendTl("kitInvFullNoDrop");
                 return false;
             }
 
+            for (Map.Entry<Integer, ItemStack> itemWithSlot : itemsWithSlot.entrySet()) {
+                final ItemStack leftover = Inventories.addItem(user.getBase(), maxStackSize, itemWithSlot.getValue(), itemWithSlot.getKey());
+                if (leftover != null) {
+                    itemList.add(leftover);
+                }
+            }
+
+            final ItemStack[] itemArray = itemList.toArray(new ItemStack[0]);
             final Map<Integer, ItemStack> leftover = Inventories.addItem(user.getBase(), maxStackSize, autoEquip, itemArray);
             if (!isDropItemsIfFull && !leftover.isEmpty()) {
                 // Inventories#hasSpace should prevent this state from EVER being reached; If it does, something has gone terribly wrong, and we should just give up and hope people report it :(
@@ -238,10 +267,10 @@ public class Kit {
 
             for (final ItemStack itemStack : leftover.values()) {
                 int spillAmount = itemStack.getAmount();
-                if (maxStackSize != 0) {
-                    itemStack.setAmount(Math.min(spillAmount, itemStack.getMaxStackSize()));
-                }
                 while (spillAmount > 0) {
+                    if (maxStackSize != 0) {
+                        itemStack.setAmount(Math.min(spillAmount, itemStack.getMaxStackSize()));
+                    }
                     user.getWorld().dropItemNaturally(user.getLocation(), itemStack);
                     spillAmount -= itemStack.getAmount();
                 }
@@ -263,12 +292,12 @@ public class Kit {
             }
 
             if (spew) {
-                user.sendMessage(tl("kitInvFull"));
+                user.sendTl("kitInvFull");
             }
         } catch (final Exception e) {
             user.getBase().updateInventory();
             ess.getLogger().log(Level.WARNING, e.getMessage());
-            throw new Exception(tl("kitError2"), e);
+            throw new TranslatableException(e, "kitError2");
         }
         return true;
     }

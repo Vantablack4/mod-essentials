@@ -9,7 +9,8 @@ import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
-import static com.earth2me.essentials.I18n.tl;
+import net.essentialsx.api.v2.events.TeleportWarmupCancelledEvent;
+import net.essentialsx.api.v2.events.TeleportWarmupCancelledEvent.CancelReason;
 
 public class AsyncTimedTeleport implements Runnable {
     private static final double MOVE_CONSTANT = 0.3;
@@ -107,14 +108,14 @@ public class AsyncTimedTeleport implements Runnable {
                     try {
                         teleport.cooldown(false);
                     } catch (final Throwable ex) {
-                        teleportOwner.sendMessage(tl("cooldownWithMessage", ex.getMessage()));
+                        teleportOwner.sendTl("cooldownWithMessage", ex.getMessage());
                         if (teleportOwner != teleportUser) {
-                            teleportUser.sendMessage(tl("cooldownWithMessage", ex.getMessage()));
+                            teleportUser.sendTl("cooldownWithMessage", ex.getMessage());
                         }
                     }
                     try {
                         cancelTimer(false);
-                        teleportUser.sendMessage(tl("teleportationCommencing"));
+                        teleportUser.sendTl("teleportationCommencing");
 
                         if (timer_chargeFor != null) {
                             timer_chargeFor.isAffordableFor(teleportOwner);
@@ -152,10 +153,18 @@ public class AsyncTimedTeleport implements Runnable {
         }
         try {
             timer_task.cancel();
+
+            final IUser teleportUser = ess.getUser(this.timer_teleportee);
+            if (teleportUser != null && teleportUser.getBase() != null) {
+                final TeleportWarmupCancelledEvent.CancelReason cancelReason = teleportUser.getBase().isOnline() ? CancelReason.MOVE : CancelReason.LEAVE;
+                final TeleportWarmupCancelledEvent event = new TeleportWarmupCancelledEvent(teleportUser.getBase(), this.teleport.getTpType(), cancelReason, notifyUser);
+                ess.getServer().getPluginManager().callEvent(event);
+            }
+
             if (notifyUser) {
-                teleportOwner.sendMessage(tl("pendingTeleportCancelled"));
+                teleportOwner.sendTl("pendingTeleportCancelled");
                 if (timer_teleportee != null && !timer_teleportee.equals(teleportOwner.getBase().getUniqueId())) {
-                    ess.getUser(timer_teleportee).sendMessage(tl("pendingTeleportCancelled"));
+                    ess.getUser(timer_teleportee).sendTl("pendingTeleportCancelled");
                 }
             }
         } finally {

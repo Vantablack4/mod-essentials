@@ -19,6 +19,8 @@ public final class Inventories {
     private static final int CHEST_SLOT = 38;
     private static final int LEG_SLOT = 37;
     private static final int BOOT_SLOT = 36;
+    private static final int BODY_SLOT = 41;
+    private static final int SADDLE_SLOT = 42;
     private static final boolean HAS_OFFHAND = VersionUtil.getServerBukkitVersion().isHigherThanOrEqualTo(VersionUtil.v1_9_R01);
     private static final int INVENTORY_SIZE = HAS_OFFHAND ? 41 : 40;
 
@@ -140,6 +142,35 @@ public final class Inventories {
         return addItem(player, maxStack, false, items);
     }
 
+    public static ItemStack addItem(final Player player, final int maxStack, ItemStack item, int slot) {
+        final int itemMax = Math.max(maxStack, item.getMaxStackSize());
+
+        ItemStack existing = player.getInventory().getItem(slot);
+        final int existingAmount;
+        if (isEmpty(existing)) {
+            existing = item.clone();
+            existingAmount = 0;
+        } else {
+            existingAmount = existing.getAmount();
+        }
+
+        if (!item.isSimilar(existing)) {
+            return item;
+        }
+
+        final int amount = item.getAmount();
+        if (amount + existingAmount <= itemMax) {
+            existing.setAmount(amount + existingAmount);
+            player.getInventory().setItem(slot, existing);
+            return null;
+        }
+
+        existing.setAmount(itemMax);
+        player.getInventory().setItem(slot, existing);
+        item.setAmount(amount + existingAmount - itemMax);
+        return item;
+    }
+
     public static Map<Integer, ItemStack> addItem(final Player player, final int maxStack, final boolean allowArmor, ItemStack... items) {
         items = normalizeItems(cloneItems(items));
         final Map<Integer, ItemStack> leftover = new HashMap<>();
@@ -224,6 +255,10 @@ public final class Inventories {
         int removedAmount = 0;
         final ItemStack[] items = player.getInventory().getContents();
         for (int i = 0; i < items.length; i++) {
+            if (isContortedSlot(i)) {
+                continue;
+            }
+
             if (!includeArmor && isArmorSlot(i)) {
                 continue;
             }
@@ -243,10 +278,18 @@ public final class Inventories {
     }
 
     public static boolean removeItemAmount(final Player player, final ItemStack toRemove, int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Amount cannot be negative.");
+        }
+
         final List<Integer> clearSlots = new ArrayList<>();
         final ItemStack[] items = player.getInventory().getContents();
 
         for (int i = 0; i < items.length; i++) {
+            if (isContortedSlot(i)) {
+                continue;
+            }
+
             final ItemStack item = items[i];
             if (isEmpty(item)) {
                 continue;
@@ -338,6 +381,10 @@ public final class Inventories {
         final HashMap<ItemStack, List<Integer>> partialSlots = new HashMap<>();
 
         for (int i = 0; i < inventoryContents.length; i++) {
+            if (isContortedSlot(i)) {
+                continue;
+            }
+
             if (!includeArmor && isArmorSlot(i)) {
                 continue;
             }
@@ -399,7 +446,15 @@ public final class Inventories {
         return stack == null || MaterialUtil.isAir(stack.getType());
     }
 
+    public static boolean isContortedSlot(final int slot) {
+        return slot == BODY_SLOT || slot == SADDLE_SLOT;
+    }
+
     private static boolean isArmorSlot(final int slot) {
         return slot == HELM_SLOT || slot == CHEST_SLOT || slot == LEG_SLOT || slot == BOOT_SLOT;
+    }
+
+    public static boolean isBottomInventorySlot(final int slot) {
+        return slot > 35;
     }
 }

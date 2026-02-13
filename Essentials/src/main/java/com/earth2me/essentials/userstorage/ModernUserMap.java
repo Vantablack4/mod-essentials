@@ -24,6 +24,7 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
     private final transient IEssentials ess;
     private final transient ModernUUIDCache uuidCache;
     private final transient LoadingCache<UUID, User> userCache;
+    private final transient ConcurrentMap<UUID, User> onlineUserCache;
 
     private final boolean debugPrintStackWithWarn;
     private final long debugMaxWarnsPerType;
@@ -42,7 +43,7 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
         // -Dnet.essentialsx.usermap.print-stack=true
         final String printStackProperty = System.getProperty("net.essentialsx.usermap.print-stack", "false");
         // -Dnet.essentialsx.usermap.max-warns=20
-        final String maxWarnProperty = System.getProperty("net.essentialsx.usermap.max-warns", "100");
+        final String maxWarnProperty = System.getProperty("net.essentialsx.usermap.max-warns", "10");
         // -Dnet.essentialsx.usermap.log-cache=true
         final String logCacheProperty = System.getProperty("net.essentialsx.usermap.log-cache", "false");
 
@@ -50,6 +51,7 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
         this.debugPrintStackWithWarn = Boolean.parseBoolean(printStackProperty);
         this.debugLogCache = Boolean.parseBoolean(logCacheProperty);
         this.debugNonPlayerWarnCounts = new ConcurrentHashMap<>();
+        this.onlineUserCache = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -60,6 +62,21 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
     @Override
     public long getCachedCount() {
         return userCache.size();
+    }
+
+    @Override
+    public boolean isCached(final UUID uuid) {
+        if (uuid == null) {
+            return false;
+        }
+        try {
+            return userCache.getIfPresent(uuid) != null;
+        } catch (Exception e) {
+            if (ess.getSettings().isDebug()) {
+                ess.getLogger().log(Level.WARNING, "Exception while checking if user is cached for " + uuid, e);
+            }
+            return false;
+        }
     }
 
     @Override
@@ -89,6 +106,10 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
         userCache.put(user.getUUID(), user);
         debugLogCache(user);
         return user;
+    }
+
+    public ConcurrentMap<UUID, User> getOnlineUserCache() {
+        return onlineUserCache;
     }
 
     @Override
@@ -139,7 +160,9 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
             debugLogUncachedNonPlayer(base);
             user = new User(base, ess);
         } else if (!base.equals(user.getBase())) {
-            ess.getLogger().log(Level.INFO, "Essentials updated the underlying Player object for " + user.getUUID());
+            if (ess.getSettings().isDebug()) {
+                ess.getLogger().log(Level.INFO, "Essentials updated the underlying Player object for " + user.getUUID());
+            }
             user.update(base);
         }
         uuidCache.updateCache(user.getUUID(), user.getName());
@@ -207,12 +230,17 @@ public class ModernUserMap extends CacheLoader<UUID, User> implements IUserMap {
         uuidCache.removeCache(uuid);
     }
 
+    public void removeCache(final UUID uuid) {
+        onlineUserCache.remove(uuid);
+    }
+
     private File getUserFile(final UUID uuid) {
         return new File(new File(ess.getDataFolder(), "userdata"), uuid.toString() + ".yml");
     }
 
     public void shutdown() {
         uuidCache.shutdown();
+        onlineUserCache.clear();
     }
 
     private void debugLogCache(final User user) {

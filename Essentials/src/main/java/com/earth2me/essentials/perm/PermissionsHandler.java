@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Level;
@@ -51,7 +52,10 @@ public class PermissionsHandler implements IPermissionsHandler {
         final long start = System.nanoTime();
         final List<String> groups = new ArrayList<>();
         groups.add(defaultGroup);
-        groups.addAll(handler.getGroups(base));
+        final List<String> handlerGroups = handler.getGroups(base);
+        if (handlerGroups != null && !handlerGroups.isEmpty()) {
+            groups.addAll(handlerGroups);
+        }
         checkPermLag(start, String.format("Getting groups for %s", base.getName()));
         return Collections.unmodifiableList(groups);
     }
@@ -104,6 +108,11 @@ public class PermissionsHandler implements IPermissionsHandler {
     @Override
     public boolean isPermissionSet(final Player base, final String node) {
         return handler.isPermissionSet(base, node);
+    }
+
+    @Override
+    public boolean isOfflinePermissionSet(UUID uuid, String node) {
+        return handler.isOfflinePermissionSet(uuid, node);
     }
 
     @Override
@@ -198,6 +207,9 @@ public class PermissionsHandler implements IPermissionsHandler {
             String enabledPermsPlugin = ((AbstractVaultHandler) handler).getEnabledPermsPlugin();
             if (enabledPermsPlugin == null) enabledPermsPlugin = "generic";
             ess.getLogger().info("Using Vault based permissions (" + enabledPermsPlugin + ")");
+        } else if (handler.getClass() == ConfigPermissionsHandler.class) {
+            ess.getLogger().info("Using config file enhanced permissions.");
+            ess.getLogger().info("Permissions listed in as player-commands will be given to all users.");
         } else if (handler.getClass() == SuperpermsHandler.class) {
             if (handler.tryProvider(ess)) {
                 ess.getLogger().warning("Detected supported permissions plugin " +
@@ -206,9 +218,6 @@ public class PermissionsHandler implements IPermissionsHandler {
                     "work until you install Vault.");
             }
             ess.getLogger().info("Using superperms-based permissions.");
-        } else if (handler.getClass() == ConfigPermissionsHandler.class) {
-            ess.getLogger().info("Using config file enhanced permissions.");
-            ess.getLogger().info("Permissions listed in as player-commands will be given to all users.");
         }
     }
 

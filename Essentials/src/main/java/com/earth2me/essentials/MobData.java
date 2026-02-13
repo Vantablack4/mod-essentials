@@ -4,11 +4,13 @@ import com.earth2me.essentials.craftbukkit.Inventories;
 import com.earth2me.essentials.utils.EnumUtil;
 import com.earth2me.essentials.utils.StringUtil;
 import com.earth2me.essentials.utils.VersionUtil;
+import net.ess3.api.TranslatableException;
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.Boat;
 import org.bukkit.entity.ChestedHorse;
+import org.bukkit.entity.Chicken;
 import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -37,8 +39,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.stream.Collectors;
-
-import static com.earth2me.essentials.I18n.tl;
 
 public enum MobData {
 
@@ -82,6 +82,7 @@ public enum MobData {
     SADDLE_HORSE("saddle", EntityType.HORSE, Data.HORSESADDLE, true),
     GOLD_ARMOR_HORSE("goldarmor", EntityType.HORSE, EnumUtil.getMaterial("GOLDEN_HORSE_ARMOR", "GOLD_BARDING"), true),
     DIAMOND_ARMOR_HORSE("diamondarmor", EntityType.HORSE, EnumUtil.getMaterial("DIAMOND_HORSE_ARMOR", "DIAMOND_BARDING"), true),
+    NETHERITE_HORSE_ARMOR("netheritearmor", EntityType.HORSE, EnumUtil.getMaterial("NETHERITE_HORSE_ARMOR"), true),
     ARMOR_HORSE("armor", EntityType.HORSE, EnumUtil.getMaterial("IRON_HORSE_ARMOR", "IRON_BARDING"), true),
     SIAMESE_CAT("siamese", MobCompat.CAT, MobCompat.CatType.SIAMESE, true),
     WHITE_CAT("white", MobCompat.CAT, MobCompat.CatType.WHITE, false),
@@ -158,8 +159,8 @@ public enum MobData {
     BLOCKFISH_TROPICAL_FISH("blockfish", MobCompat.TROPICAL_FISH, "tropicalfish:BLOCKFISH", true),
     BETTY_TROPICAL_FISH("betty", MobCompat.TROPICAL_FISH, "tropicalfish:BETTY", true),
     CLAYFISH_TROPICAL_FISH("clayfish", MobCompat.TROPICAL_FISH, "tropicalfish:CLAYFISH", true),
-    BROWN_MUSHROOM_COW("brown", EntityType.MUSHROOM_COW, "mooshroom:BROWN", true),
-    RED_MUSHROOM_COW("red", EntityType.MUSHROOM_COW, "mooshroom:RED", true),
+    BROWN_MUSHROOM_COW("brown", MobCompat.MOOSHROOM, "mooshroom:BROWN", true),
+    RED_MUSHROOM_COW("red", MobCompat.MOOSHROOM, "mooshroom:RED", true),
     AGGRESSIVE_PANDA_MAIN("aggressive", MobCompat.PANDA, "pandamain:AGGRESSIVE", true),
     LAZY_PANDA_MAIN("lazy", MobCompat.PANDA, "pandamain:LAZY", true),
     WORRIED_PANDA_MAIN("worried", MobCompat.PANDA, "pandamain:WORRIED", true),
@@ -210,6 +211,32 @@ public enum MobData {
     OAK_BOAT("oak", Boat.class, MobCompat.BoatVariant.OAK, true),
     SPRUCE_BOAT("spruce", Boat.class, MobCompat.BoatVariant.SPRUCE, true),
     SADDLE_CAMEL("saddle", MobCompat.CAMEL, Data.CAMELSADDLE, true),
+    PALE_WOLF("pale", EntityType.WOLF, "wolf:PALE", true),
+    SPOTTED_WOLF("spotted", EntityType.WOLF, "wolf:PALE", true),
+    SNOWY_WOLF("snowy", EntityType.WOLF, "wolf:PALE", true),
+    BLACK_WOLF("black", EntityType.WOLF, "wolf:BLACK", true),
+    ASHEN_WOLF("ashen", EntityType.WOLF, "wolf:ASHEN", true),
+    RUSTY_WOLF("rusty", EntityType.WOLF, "wolf:RUSTY", true),
+    WOODS_WOLF("woods", EntityType.WOLF, "wolf:WOODS", true),
+    CHESTNUT_WOLF("chestnut", EntityType.WOLF, "wolf:CHESTNUT", true),
+    STRIPED_WOLF("striped", EntityType.WOLF, "wolf:STRIPED", true),
+    SMALL_SALMON("small", MobCompat.SALMON, "salmon:SMALL", true),
+    MEDIUM_SALMON("medium", MobCompat.SALMON, "salmon:MEDIUM", true),
+    LARGE_SALMON("large", MobCompat.SALMON, "salmon:LARGE", true),
+    TEMPERATE_COW("temperate", EntityType.COW.getEntityClass(), "cow:TEMPERATE", true),
+    WARM_COW("warm", EntityType.COW.getEntityClass(), "cow:WARM", true),
+    COLD_COW("cold", EntityType.COW.getEntityClass(), "cow:COLD", true),
+    TEMPERATE_CHICKEN("temperate", Chicken.class, "chicken:TEMPERATE", true),
+    WARM_CHICKEN("warm", Chicken.class, "chicken:WARM", true),
+    COLD_CHICKEN("cold", Chicken.class, "chicken:COLD", true),
+    TEMPERATE_PIG("temperate", Pig.class, "pig:TEMPERATE", true),
+    WARM_PIG("warm", Pig.class, "pig:WARM", true),
+    COLD_PIG("cold", Pig.class, "pig:COLD", true),
+    SADDLE_CAMEL_HUSK("saddle", MobCompat.CAMEL_HUSK, Data.CAMELHUSKSADDLE, true),
+    TEMPERATE_ZOMBIE_NAUTILUS("temperate", MobCompat.ZOMBIE_NAUTILUS, "zombienautilus:TEMPERATE", true),
+    WARM_ZOMBIE_NAUTILUS("warm", MobCompat.ZOMBIE_NAUTILUS, "zombienautilus:WARM", true),
+    SADDLE_NAUTILUS("saddle", MobCompat.NAUTILUS, Data.NAUTILUSSADDLE, true),
+    SADDLE_ZOMBIE_NAUTILUS("saddle", MobCompat.ZOMBIE_NAUTILUS, Data.NAUTILUSSADDLE, true)
     ;
 
     final private String nickname;
@@ -328,14 +355,14 @@ public enum MobData {
                 }
                 this.matched = rawData;
             } catch (final Exception e) {
-                throw new Exception(tl("sheepMalformedColor"), e);
+                throw new TranslatableException(e, "sheepMalformedColor");
             }
         } else if (this.value.equals(Data.EXP)) {
             try {
                 ((ExperienceOrb) spawned).setExperience(Integer.parseInt(rawData));
                 this.matched = rawData;
             } catch (final NumberFormatException e) {
-                throw new Exception(tl("invalidNumber"), e);
+                throw new TranslatableException(e, "invalidNumber");
             }
         } else if (this.value.equals(Data.SIZE)) {
             try {
@@ -347,7 +374,7 @@ public enum MobData {
                 }
                 this.matched = rawData;
             } catch (final NumberFormatException e) {
-                throw new Exception(tl("slimeMalformedSize"), e);
+                throw new TranslatableException(e, "slimeMalformedSize");
             }
         } else if (this.value instanceof Horse.Color) {
             ((Horse) spawned).setColor((Horse.Color) this.value);
@@ -390,6 +417,12 @@ public enum MobData {
             ((Goat) spawned).setScreaming(true);
         } else if (this.value.equals(Data.CAMELSADDLE)) {
             MobCompat.setCamelSaddle(spawned, target);
+        } else if (this.value.equals(Data.CAMELHUSKSADDLE)) {
+            MobCompat.setCamelSaddle(spawned, target);
+        } else if (this.value.equals(Data.NAUTILUSSADDLE)) {
+            MobCompat.setNautilusSaddle(spawned, target);
+        } else if (this.value.equals(Data.ZOMBIENAUTILUSSADDLE)) {
+            MobCompat.setNautilusSaddle(spawned, target);
         } else if (this.value instanceof MobCompat.BoatVariant) {
             MobCompat.setBoatVariant(spawned, (MobCompat.BoatVariant) this.value);
         } else if (this.value instanceof String) {
@@ -425,6 +458,24 @@ public enum MobData {
                 case "frog":
                     MobCompat.setFrogVariant(spawned, split[1]);
                     break;
+                case "wolf":
+                    MobCompat.setWolfVariant(spawned, split[1]);
+                    break;
+                case "salmon":
+                    MobCompat.setSalmonSize(spawned, split[1]);
+                    break;
+                case "cow":
+                    MobCompat.setCowVariant(spawned, split[1]);
+                    break;
+                case "chicken":
+                    MobCompat.setChickenVariant(spawned, split[1]);
+                    break;
+                case "pig":
+                    MobCompat.setPigVariant(spawned, split[1]);
+                    break;
+                case "zombienautilus":
+                    MobCompat.setZombieNautilusVariant(spawned, split[1]);
+                    break;
             }
         } else {
             Essentials.getWrappedLogger().warning("Unknown mob data type: " + this.toString());
@@ -450,5 +501,8 @@ public enum MobData {
         FISH_PATTERN_COLOR,
         GOAT_SCREAMING,
         CAMELSADDLE,
+        CAMELHUSKSADDLE,
+        NAUTILUSSADDLE,
+        ZOMBIENAUTILUSSADDLE,
     }
 }

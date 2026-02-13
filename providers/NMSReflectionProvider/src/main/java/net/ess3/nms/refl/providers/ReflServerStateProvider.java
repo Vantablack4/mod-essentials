@@ -2,11 +2,13 @@ package net.ess3.nms.refl.providers;
 
 import net.ess3.nms.refl.ReflUtil;
 import net.ess3.provider.ServerStateProvider;
+import net.essentialsx.providers.ProviderData;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
+@ProviderData(description = "Reflection Server State Provider")
 public class ReflServerStateProvider implements ServerStateProvider {
     private final Object nmsServer;
     private final MethodHandle nmsIsRunning;
@@ -16,7 +18,13 @@ public class ReflServerStateProvider implements ServerStateProvider {
         MethodHandle isRunning = null;
 
         final String MDFIVEMAGICLETTER;
-        if (ReflUtil.getNmsVersionObject().isHigherThanOrEqualTo(ReflUtil.V1_19_R2)) {
+        if (ReflUtil.getNmsVersionObject().isHigherThanOrEqualTo(ReflUtil.V1_21_R7)) {
+            MDFIVEMAGICLETTER = "z";
+        } else if (ReflUtil.getNmsVersionObject().isHigherThanOrEqualTo(ReflUtil.V1_21_R6)) {
+            MDFIVEMAGICLETTER = "B";
+        } else if (ReflUtil.getNmsVersionObject().isHigherThanOrEqualTo(ReflUtil.V1_20_R4)) {
+            MDFIVEMAGICLETTER = "x";
+        } else if (ReflUtil.getNmsVersionObject().isHigherThanOrEqualTo(ReflUtil.V1_19_R2)) {
             MDFIVEMAGICLETTER = "v";
         } else if (ReflUtil.getNmsVersionObject().isHigherThanOrEqualTo(ReflUtil.V1_19_R1)) {
             MDFIVEMAGICLETTER = "u";
@@ -49,10 +57,5 @@ public class ReflServerStateProvider implements ServerStateProvider {
             }
         }
         return false;
-    }
-
-    @Override
-    public String getDescription() {
-        return "NMS Reflection Server State Provider";
     }
 }
