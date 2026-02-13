@@ -3,6 +3,8 @@ package net.ess3.provider.providers;
 import io.papermc.paper.threadedregions.RegionizedServerInitEvent;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.ess3.provider.SchedulingProvider;
+import net.essentialsx.providers.ProviderData;
+import net.essentialsx.providers.ProviderTest;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.event.EventHandler;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+@ProviderData(description = "Folia Scheduling Provider")
 public class FoliaSchedulingProvider implements SchedulingProvider, Listener {
     private final Plugin plugin;
     private List<Runnable> initTasks = new ArrayList<>();
@@ -119,9 +122,13 @@ public class FoliaSchedulingProvider implements SchedulingProvider, Listener {
         return task::cancel;
     }
 
-    @Override
-    public String getDescription() {
-        return "Folia Scheduling Provider";
+    @ProviderTest
+    public static boolean test() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
-
 }

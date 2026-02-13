@@ -396,7 +396,7 @@ public class Essentials extends JavaPlugin implements net.ess3.api.IEssentials {
             // Scheduling provider
             providerFactory.registerProvider(FoliaSchedulingProvider.class, BukkitSchedulingProvider.class);
 
-            if (!TESTING) {
+            if (!TESTING || true) { // FIXME: The scheduling provider is necessary for tests to pass without adding checks for TESTING everywhere
                 providerFactory.finalizeRegistration();
             }
 

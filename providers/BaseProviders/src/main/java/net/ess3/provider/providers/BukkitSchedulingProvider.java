@@ -1,12 +1,14 @@
 package net.ess3.provider.providers;
 
 import net.ess3.provider.SchedulingProvider;
+import net.essentialsx.providers.ProviderData;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
+@ProviderData(description = "Bukkit Scheduling Provider")
 public class BukkitSchedulingProvider implements SchedulingProvider {
     private final Plugin plugin;
 
@@ -98,10 +100,5 @@ public class BukkitSchedulingProvider implements SchedulingProvider {
     public EssentialsTask runAsyncTaskRepeating(Runnable runnable, long delay, long period) {
         final BukkitTask task = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, runnable, delay, period);
         return task::cancel;
-    }
-
-    @Override
-    public String getDescription() {
-        return "Bukkit Scheduling Provider";
     }
 }
