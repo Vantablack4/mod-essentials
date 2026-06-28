@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "mod_essentials",
+  "version": "${version}",
+  "name": "Vantablack Essentials",
+  "description": "Server-side Fabric port of the practical EssentialsX command surface for Vantablack.",
+  "authors": ["Vantablack4", "EssentialsX contributors"],
+  "contact": {
+    "homepage": "https://github.com/Vantablack4/mod-essentials",
+    "sources": "https://github.com/EssentialsX/Essentials"
+  },
+  "license": "GPL-3.0-only",
+  "environment": "server",
+  "entrypoints": {
+    "main": ["com.vantablack4.essentials.VantablackEssentialsMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": "26.1.2",
+    "fabric-api": "*"
+  }
+}
