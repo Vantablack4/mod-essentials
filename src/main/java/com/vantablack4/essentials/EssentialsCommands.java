@@ -135,9 +135,9 @@ public final class EssentialsCommands {
     private int help(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         source.sendSystemMessage(Messages.header("Komutlar"));
-        source.sendSystemMessage(Messages.line("Teleport", "/spawn | /home [name] | /warp <name> | /back | /tpa <player>"));
+        source.sendSystemMessage(Messages.line("Teleport", "/spawn | /home [name] | /warp <name> | /back | /tpa \"Character Name\""));
         source.sendSystemMessage(Messages.line("Homes", "/sethome [name] | /delhome <name> | /homes"));
-        source.sendSystemMessage(Messages.line("Admin", "/setspawn | /setwarp <name> | /delwarp <name> | /heal [player] | /feed [player] | /fly [player] [true|false] | /god [player] [true|false] | /broadcast <message>"));
+        source.sendSystemMessage(Messages.line("Admin", "/setspawn | /setwarp <name> | /delwarp <name> | /heal [\"Character Name\"] | /feed [\"Character Name\"] | /fly [\"Character Name\"] [true|false] | /god [\"Character Name\"] [true|false] | /broadcast <message>"));
         return 1;
     }
 
@@ -283,7 +283,7 @@ public final class EssentialsCommands {
         }
         TpaService.TeleportRequest request = tpaService.request(requester, target, type);
         target.sendSystemMessage(request.targetMessage());
-        requester.sendSystemMessage(Messages.success("Işınlanma isteği gönderildi: " + target.getName().getString()));
+        requester.sendSystemMessage(Messages.success("Işınlanma isteği gönderildi: " + displayName(target)));
         return 1;
     }
 
@@ -313,7 +313,7 @@ public final class EssentialsCommands {
                 target.sendSystemMessage(Messages.success("Işınlanma isteği reddedildi."));
                 ServerPlayer requester = context.getSource().getServer().getPlayerList().getPlayer(request.requesterUuid());
                 if (requester != null) {
-                    requester.sendSystemMessage(Messages.error(target.getName().getString() + " ışınlanma isteğini reddetti."));
+                    requester.sendSystemMessage(Messages.error(displayName(target) + " ışınlanma isteğini reddetti."));
                 }
                 return 1;
             })
@@ -330,7 +330,7 @@ public final class EssentialsCommands {
                 requester.sendSystemMessage(Messages.success("Işınlanma isteği iptal edildi."));
                 ServerPlayer target = context.getSource().getServer().getPlayerList().getPlayer(request.targetUuid());
                 if (target != null) {
-                    target.sendSystemMessage(Messages.error(requester.getName().getString() + " ışınlanma isteğini iptal etti."));
+                    target.sendSystemMessage(Messages.error(displayName(requester) + " ışınlanma isteğini iptal etti."));
                 }
                 return 1;
             })
@@ -342,7 +342,7 @@ public final class EssentialsCommands {
 
     private int heal(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         playerStateService.heal(target);
-        context.getSource().sendSystemMessage(Messages.success("Oyuncu iyileştirildi: " + target.getName().getString()));
+        context.getSource().sendSystemMessage(Messages.success("Oyuncu iyileştirildi: " + displayName(target)));
         if (context.getSource().getPlayer() != target) {
             target.sendSystemMessage(Messages.success("İyileştirildin."));
         }
@@ -351,7 +351,7 @@ public final class EssentialsCommands {
 
     private int feed(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         playerStateService.feed(target);
-        context.getSource().sendSystemMessage(Messages.success("Oyuncu doyuruldu: " + target.getName().getString()));
+        context.getSource().sendSystemMessage(Messages.success("Oyuncu doyuruldu: " + displayName(target)));
         if (context.getSource().getPlayer() != target) {
             target.sendSystemMessage(Messages.success("Doyuruldun."));
         }
@@ -366,7 +366,7 @@ public final class EssentialsCommands {
             context.getSource().sendSystemMessage(Messages.error("Fly komutu yapılandırmada kapalı."));
             return 0;
         }
-        context.getSource().sendSystemMessage(Messages.success("Fly " + (result.value() ? "açıldı" : "kapandı") + ": " + target.getName().getString()));
+        context.getSource().sendSystemMessage(Messages.success("Fly " + (result.value() ? "açıldı" : "kapandı") + ": " + displayName(target)));
         return 1;
     }
 
@@ -378,7 +378,7 @@ public final class EssentialsCommands {
             context.getSource().sendSystemMessage(Messages.error("God komutu yapılandırmada kapalı."));
             return 0;
         }
-        context.getSource().sendSystemMessage(Messages.success("God " + (result.value() ? "açıldı" : "kapandı") + ": " + target.getName().getString()));
+        context.getSource().sendSystemMessage(Messages.success("God " + (result.value() ? "açıldı" : "kapandı") + ": " + displayName(target)));
         return 1;
     }
 
@@ -400,6 +400,10 @@ public final class EssentialsCommands {
 
     private CompletableFuture<Suggestions> suggestWarps(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         return SharedSuggestionProvider.suggest(storage.warps(), builder);
+    }
+
+    private static String displayName(ServerPlayer player) {
+        return player.getDisplayName().getString();
     }
 
     private static StoredLocation worldSpawn(MinecraftServer server) {

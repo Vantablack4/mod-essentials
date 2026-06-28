@@ -36,9 +36,9 @@ public final class TpaService {
     public TeleportRequest request(ServerPlayer requester, ServerPlayer target, RequestType type) {
         TeleportRequest request = new TeleportRequest(
             requester.getUUID(),
-            requester.getName().getString(),
+            displayName(requester),
             target.getUUID(),
-            target.getName().getString(),
+            displayName(target),
             type,
             Instant.now().plus(Duration.ofSeconds(config.teleportRequestTimeoutSeconds()))
         );
@@ -64,12 +64,12 @@ public final class TpaService {
             backService.record(requester);
             StoredLocation.capture(target).teleport(server, requester);
             requester.sendSystemMessage(Messages.success("Teleport request accepted."));
-            target.sendSystemMessage(Messages.success("Teleported " + requester.getName().getString() + " to you."));
+            target.sendSystemMessage(Messages.success("Teleported " + displayName(requester) + " to you."));
         } else {
             backService.record(target);
             StoredLocation.capture(requester).teleport(server, target);
             target.sendSystemMessage(Messages.success("Teleport request accepted."));
-            requester.sendSystemMessage(Messages.success("Teleported " + target.getName().getString() + " to you."));
+            requester.sendSystemMessage(Messages.success("Teleported " + displayName(target) + " to you."));
         }
         return AcceptResult.ACCEPTED;
     }
@@ -110,5 +110,9 @@ public final class TpaService {
             }
             return Messages.line("TPA", requesterName + " wants you to teleport to them. Use /tpaccept or /tpdeny.");
         }
+    }
+
+    private static String displayName(ServerPlayer player) {
+        return player.getDisplayName().getString();
     }
 }

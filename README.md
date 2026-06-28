@@ -15,7 +15,7 @@ Included in the first Fabric port:
 - `/home`, `/sethome`, `/delhome`, `/homes`
 - `/warp`, `/warps`, `/setwarp`, `/delwarp`
 - `/back`
-- `/tpa`, `/tpahere`, `/tpaccept`, `/tpdeny`, `/tpacancel`
+- `/tpa "Character Name"`, `/tpahere "Character Name"`, `/tpaccept`, `/tpdeny`, `/tpacancel`
 - `/heal`, `/feed`, `/fly`, `/god`
 - `/broadcast`
 - `/vessentials` and `/essentials` status/help
