@@ -1,7 +1,7 @@
 # Vantablack Essentials
 
-Server-side Fabric port of the practical EssentialsX command surface for the
-Vantablack Minecraft server.
+Server-side Fabric port of the EssentialsX command surface for the Vantablack
+Minecraft server.
 
 This repository is a fork of [EssentialsX/Essentials](https://github.com/EssentialsX/Essentials)
 and remains GPL-3.0-only. The active build is a Fabric mod rather than the
@@ -9,25 +9,74 @@ upstream Bukkit/Paper plugin suite.
 
 ## Scope
 
-Included in the first Fabric port:
+This fork keeps the upstream EssentialsX source tree for license and porting
+reference, while the active runtime is the Fabric mod under `src/main`.
+The maintained parity manifest is `docs/fabric-command-manifest.json`; regenerate
+`docs/essentialsx-parity.md` with `node scripts/essentialsx-parity.mjs`.
 
-- `/spawn`, `/setspawn`
-- `/home`, `/sethome`, `/delhome`, `/homes`
-- `/warp`, `/warps`, `/setwarp`, `/delwarp`
-- `/back`
-- `/tpa "Character Name"`, `/tpahere "Character Name"`, `/tpaccept`, `/tpdeny`, `/tpacancel`
-- `/heal`, `/feed`, `/fly`, `/god`
-- `/broadcast`
-- `/vessentials` and `/essentials` status/help
+Included command groups:
 
-Not included yet:
+- Status/help: `/vessentials`, `/essentials`
+- Spawn: `/spawn`, `/setspawn`
+- Homes: `/home [name]`, `/sethome [name]`, `/delhome <name>`, `/homes`
+- Warps: `/warp [name]`, `/warps`, `/setwarp <name>`, `/delwarp <name>`
+- Return/requests: `/back`, `/tpa`, `/tpask`, `/tpahere`, `/tpaall`,
+  `/tpaccept`, `/tpyes`, `/tpdeny`, `/tpno`, `/tpacancel`, `/tpauto`,
+  `/tptoggle`
+- Admin teleport: `/tp`, `/teleport`, `/tphere`, `/s`, `/tpall`, `/tppos`,
+  `/top`, `/jump`, `/bottom`, `/world`
+- Player state: `/heal`, `/feed`, `/fly`, `/god`, `/speed`
+- Gamemode: `/gamemode`, `/gm`, `/gms`, `/gmc`, `/gma`, `/gmsp`
+- Inventory/tools: `/clearinventory`, `/ci`, `/repair [hand|all]`, `/hat`,
+  `/enderchest`, `/ec`, `/ext`, `/extinguish`, `/near`, `/invsee`,
+  `/disposal`, `/workbench`, `/anvil`, `/cartographytable`, `/grindstone`,
+  `/loom`, `/smithingtable`, `/stonecutter`
+- Item/meta: `/more`, `/itemdb`, `/give`, `/item`, `/i`, `/enchant`,
+  `/itemname`, `/itemlore`, `/book title`, `/book author`, `/potion`,
+  `/recipe`, `/skull`
+- Economy: `/balance`, `/balancetop`, `/pay`, `/paytoggle`,
+  `/payconfirmtoggle`, `/eco`, `/worth`, `/setworth`, `/sell`
+- Social/player utilities: `/msg`, `/r`, `/ignore`, `/msgtoggle`, `/rtoggle`,
+  `/socialspy`, `/helpop`, `/me`, `/afk`, `/mail`, `/nick`,
+  `/toggleshout`, `/playtime`, `/seen`, `/whois`, `/realname`, `/exp`,
+  `/ptime`, `/pweather`, `/condense`, `/unlimited`, `/powertool`,
+  `/powertoollist`, `/powertooltoggle`, `/backup`, `/customtext`
+- Admin/sanctions: `/ban`, `/tempban`, `/unban`, `/banip`, `/tempbanip`,
+  `/unbanip`, `/kick`, `/kickall`, `/mute`
+- Jail/random teleport: `/setjail`, `/deljail`, `/togglejail`, `/jails`,
+  `/jailedplayers`, `/tpr`, `/settpr`
+- World/fun/entity: `/lightning`, `/antioch`, `/nuke`, `/fireball`,
+  `/firework`, `/beezooka`, `/kittycannon`, `/break`, `/ice`, `/tree`,
+  `/bigtree`, `/spawnmob`, `/spawner`, `/editsign`, `/remove`, `/vanish`
+- World/admin broadcast: `/day`, `/night`, `/noon`, `/midnight`, `/sun`,
+  `/storm`, `/thunder`, `/broadcast`, `/bc`, `/alert`, `/broadcastworld`,
+  `/burn`, `/rest`, `/list`, `/gc`, `/renamehome`, `/warpinfo`
+- Compatibility roots: `/discordbroadcast`, `/discord`, `/link`, `/unlink`,
+  `/setxmpp`, `/xmpp`, `/xmppspy`, `/tpoffline`
 
-- EssentialsChat behavior; Vantablack chat is owned by `mod-roleplay`.
-- Economy/pay/sell/worth; Vantablack should use platform APIs for durable
-  economy contracts.
-- Bans/mutes/sanctions; durable enforcement should live in backend/gateway
-  flows before adding command wrappers.
-- Bukkit/Paper compatibility, `plugin.yml`, Vault, or LuckPerms integration.
+Player-targeting commands accept the Minecraft account name or the in-game
+display/character name. Quote display names that include spaces, for example:
+
+```text
+/tpa "Character Name"
+/tphere "Character Name"
+/gm creative "Character Name"
+```
+
+Fabric compatibility boundaries:
+
+- The command roots and upstream aliases from the retained EssentialsX
+  `plugin.yml` files are registered. See `docs/essentialsx-parity.md` for exact
+  coverage and usage differences.
+- Bukkit/Paper-only integrations such as Vault, LuckPerms, EssentialsX Discord,
+  DiscordLink, and XMPP are exposed as explicit compatibility roots where no
+  Fabric bridge exists yet.
+- Offline player inventory/location mutation is not performed. Fabric has no
+  safe Bukkit-style offline player edit API without a dedicated player-data
+  DataFixer/save bridge.
+- Upstream message bundles are retained under `src/main/resources/essentialsx`.
+  Command output is still being moved from Fabric-local strings onto the
+  upstream message keys.
 
 ## Configuration
 
@@ -46,8 +95,18 @@ State is stored in the same directory:
 - `spawn.properties`
 - `homes.properties`
 - `warps.properties`
+- `economy-accounts.properties`
+- `economy.properties`
+- `worth.properties`
+- `kits/`
+- `mail.properties`
+- `social-state.properties`
+- `mutes.properties`
+- `jails.properties`
+- `jail-state.properties`
+- `random-teleport.properties`
 
-Runtime `/back` and TPA requests are intentionally in-memory only.
+Runtime `/back` and pending TPA requests are intentionally in-memory only.
 
 ## Build
 

@@ -1,10 +1,12 @@
 package com.vantablack4.essentials;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -20,7 +22,7 @@ public record EssentialsConfig(
 ) {
     private static final int DEFAULT_ADMIN_PERMISSION_LEVEL = 2;
     private static final int DEFAULT_MAX_HOMES = 5;
-    private static final int DEFAULT_TPA_TIMEOUT_SECONDS = 60;
+    private static final int DEFAULT_TPA_TIMEOUT_SECONDS = 120;
 
     public static EssentialsConfig load() {
         Path configDirectory = FabricLoader.getInstance().getConfigDir().resolve(VantablackEssentialsMod.MOD_ID);
@@ -29,6 +31,7 @@ public record EssentialsConfig(
 
         try {
             Files.createDirectories(configDirectory);
+            writeDefaultYamlTemplate(configDirectory.resolve("config.yml"));
             if (Files.isRegularFile(configFile)) {
                 try (Reader reader = Files.newBufferedReader(configFile)) {
                     properties.load(reader);
@@ -59,6 +62,18 @@ public record EssentialsConfig(
         defaults.setProperty("runtime.fly-and-god-enabled", "true");
         try (Writer writer = Files.newBufferedWriter(configFile)) {
             defaults.store(writer, "Vantablack Essentials configuration");
+        }
+    }
+
+    private static void writeDefaultYamlTemplate(Path configFile) throws IOException {
+        if (Files.isRegularFile(configFile)) {
+            return;
+        }
+        try (InputStream stream = EssentialsConfig.class.getClassLoader().getResourceAsStream("essentialsx/config.yml")) {
+            if (stream == null) {
+                return;
+            }
+            Files.copy(stream, configFile, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

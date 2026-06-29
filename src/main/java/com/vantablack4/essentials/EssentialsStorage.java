@@ -57,11 +57,19 @@ public final class EssentialsStorage {
     }
 
     public synchronized Optional<StoredLocation> spawn() {
-        return StoredLocation.read(spawnProperties, "spawn.default");
+        return spawn("default");
+    }
+
+    public synchronized Optional<StoredLocation> spawn(String group) {
+        return StoredLocation.read(spawnProperties, spawnPrefix(group));
     }
 
     public synchronized void setSpawn(StoredLocation location) {
-        StoredLocation.write(spawnProperties, "spawn.default", location);
+        setSpawn("default", location);
+    }
+
+    public synchronized void setSpawn(String group, StoredLocation location) {
+        StoredLocation.write(spawnProperties, spawnPrefix(group), location);
         saveProperties(spawnFile, spawnProperties, "Vantablack Essentials spawn");
     }
 
@@ -92,6 +100,21 @@ public final class EssentialsStorage {
             saveProperties(homesFile, homeProperties, "Vantablack Essentials homes");
         }
         return removed;
+    }
+
+    public synchronized boolean renameHome(UUID playerUuid, String oldName, String newName) {
+        String oldNormalized = normalizeName(oldName);
+        String newNormalized = normalizeName(newName);
+        if (oldNormalized.isBlank() || newNormalized.isBlank() || oldNormalized.equals(newNormalized)) {
+            return false;
+        }
+        Optional<StoredLocation> location = home(playerUuid, oldNormalized);
+        if (location.isEmpty()) {
+            return false;
+        }
+        deleteHome(playerUuid, oldNormalized);
+        setHome(playerUuid, newNormalized, location.get());
+        return true;
     }
 
     public synchronized List<String> warps() {
@@ -142,6 +165,11 @@ public final class EssentialsStorage {
 
     private String warpPrefix(String name) {
         return WARP_PREFIX + normalizeName(name);
+    }
+
+    private static String spawnPrefix(String group) {
+        String normalized = normalizeName(group);
+        return "spawn." + (normalized.isBlank() ? "default" : normalized);
     }
 
     private static boolean removePrefixed(Properties properties, String prefix) {

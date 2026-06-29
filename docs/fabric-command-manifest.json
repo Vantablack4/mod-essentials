@@ -1,0 +1,1160 @@
+{
+  "schemaVersion": 1,
+  "description": "Maintained command surface manifest for the Fabric mod-essentials port. Keep this file in sync with src/main/java/com/vantablack4/essentials/EssentialsCommands.java.",
+  "source": "src/main/java/com/vantablack4/essentials/EssentialsCommands.java",
+  "reportNotes": [
+    "The parity script extracts upstream EssentialsX command metadata from retained plugin.yml files and compares it to this manifest.",
+    "This manifest describes the active Fabric command surface; it is intentionally stricter than README marketing copy.",
+    "Fabric usages use Brigadier/player-facing syntax rather than Bukkit's /<command> placeholder."
+  ],
+  "commands": [
+    {
+      "name": "vessentials",
+      "usages": ["/vessentials", "/vessentials help", "/vessentials status"],
+      "aliases": [],
+      "upstream": null,
+      "notes": "Vantablack-specific status/help root."
+    },
+    {
+      "name": "essentials",
+      "usages": ["/essentials", "/essentials help", "/essentials status"],
+      "aliases": ["eessentials", "ess", "eess", "essversion"],
+      "upstream": "essentials",
+      "notes": "Fabric status/help root; upstream reload/version subcommands are not complete yet."
+    },
+    {
+      "name": "spawn",
+      "usages": ["/spawn", "/spawn <player>"],
+      "aliases": ["espawn"],
+      "upstream": "spawn",
+      "notes": "Teleports caller or an admin target to configured spawn or world spawn."
+    },
+    {
+      "name": "setspawn",
+      "usages": ["/setspawn", "/setspawn <group>"],
+      "aliases": ["esetspawn"],
+      "upstream": "setspawn",
+      "notes": "Admin-only; stores default or named group spawn locations. Group selection is not permission-integrated yet."
+    },
+    {
+      "name": "home",
+      "usages": ["/home", "/home <name>"],
+      "aliases": ["ehome", "homes", "ehomes"],
+      "upstream": "home",
+      "notes": "Self homes only; no [player:] homes, bed home, or spawn-if-no-home yet."
+    },
+    {
+      "name": "sethome",
+      "usages": ["/sethome", "/sethome <name>"],
+      "aliases": ["esethome", "createhome", "ecreatehome"],
+      "upstream": "sethome",
+      "notes": "Self homes only; fixed Fabric compatibility home limit."
+    },
+    {
+      "name": "delhome",
+      "usages": ["/delhome <name>"],
+      "aliases": ["edelhome", "remhome", "eremhome", "rmhome", "ermhome"],
+      "upstream": "delhome",
+      "notes": "Self homes only; no [player:] delete yet."
+    },
+    {
+      "name": "warp",
+      "usages": ["/warp", "/warp <name>", "/warp <name> <player>"],
+      "aliases": ["ewarp", "warps", "ewarps"],
+      "upstream": "warp",
+      "notes": "Lists or teleports caller/admin target; no page argument or per-warp permissions yet."
+    },
+    {
+      "name": "setwarp",
+      "usages": ["/setwarp <name>"],
+      "aliases": ["createwarp", "ecreatewarp", "esetwarp"],
+      "upstream": "setwarp",
+      "notes": "Admin-only named warp set."
+    },
+    {
+      "name": "delwarp",
+      "usages": ["/delwarp <name>"],
+      "aliases": ["edelwarp", "remwarp", "eremwarp", "rmwarp", "ermwarp"],
+      "upstream": "delwarp",
+      "notes": "Admin-only named warp delete."
+    },
+    {
+      "name": "balance",
+      "usages": ["/balance", "/balance <player>"],
+      "aliases": ["bal", "ebal", "ebalance", "money", "emoney"],
+      "upstream": "balance",
+      "notes": "Local server-only economy balance for self plus admin target lookup by online display name, UUID, cached profile, or stored account."
+    },
+    {
+      "name": "balancetop",
+      "usages": ["/balancetop", "/balancetop <page>"],
+      "aliases": ["ebalancetop", "baltop", "ebaltop"],
+      "upstream": "balancetop",
+      "notes": "Ranks persisted local balances; no Vault or backend economy provider integration."
+    },
+    {
+      "name": "pay",
+      "usages": ["/pay <player> <amount>"],
+      "aliases": ["epay"],
+      "upstream": "pay",
+      "notes": "Online-player/display-name payments using local balances; offline pay remains disabled like upstream without offline-pay permission."
+    },
+    {
+      "name": "paytoggle",
+      "usages": ["/paytoggle", "/paytoggle <player>", "/payon [player]", "/payoff [player]"],
+      "aliases": ["epaytoggle", "payoff", "epayoff", "payon", "epayon"],
+      "upstream": "paytoggle",
+      "notes": "Persistent local accepting-pay toggle for self and admin targets."
+    },
+    {
+      "name": "payconfirmtoggle",
+      "usages": ["/payconfirmtoggle", "/payconfirmon", "/payconfirmoff"],
+      "aliases": ["epayconfirmtoggle", "payconfirmoff", "epayconfirmoff", "payconfirmon", "epayconfirmon", "payconfirm", "epayconfirm"],
+      "upstream": "payconfirmtoggle",
+      "notes": "Persistent local confirmation preference; enabled players must repeat matching /pay within the confirmation window."
+    },
+    {
+      "name": "eco",
+      "usages": ["/eco give <player> <amount>", "/eco take <player> <amount>", "/eco set <player> <amount>", "/eco reset <player>"],
+      "aliases": ["eeco", "economy", "eeconomy"],
+      "upstream": "eco",
+      "notes": "Admin local balance mutation with EssentialsX starting/min/max money bounds; offline targets require a stored account or cached Minecraft profile."
+    },
+    {
+      "name": "sell",
+      "usages": ["/sell hand [amount]", "/sell <item> [amount]", "/sell all", "/sell inventory", "/sell blocks [amount]"],
+      "aliases": ["esell"],
+      "upstream": "sell",
+      "notes": "Sells held, matching, block, or inventory items using local worth.properties values; named-item selling follows local economy settings."
+    },
+    {
+      "name": "setworth",
+      "usages": ["/setworth <amount>", "/setworth <item> <amount>"],
+      "aliases": ["esetworth"],
+      "upstream": "setworth",
+      "notes": "Admin item worth mutation backed by local worth.properties."
+    },
+    {
+      "name": "worth",
+      "usages": ["/worth", "/worth hand [amount]", "/worth <item> [amount]", "/worth all", "/worth inventory", "/worth blocks [amount]"],
+      "aliases": ["eprice", "price", "eworth"],
+      "upstream": "worth",
+      "notes": "Calculates sell value from local worth.properties for held, matching, block, or inventory items."
+    },
+    {
+      "name": "back",
+      "usages": ["/back", "/back <player>"],
+      "aliases": ["eback", "return", "ereturn"],
+      "upstream": "back",
+      "notes": "Self back plus admin target back."
+    },
+    {
+      "name": "tpa",
+      "usages": ["/tpa <player>"],
+      "aliases": ["call", "ecall", "etpa", "tpask", "etpask"],
+      "upstream": "tpa",
+      "notes": "Online-player/display-name request with in-memory timeout."
+    },
+    {
+      "name": "tpahere",
+      "usages": ["/tpahere <player>"],
+      "aliases": ["etpahere"],
+      "upstream": "tpahere",
+      "notes": "Online-player/display-name here request."
+    },
+    {
+      "name": "tpaccept",
+      "usages": ["/tpaccept", "/tpaccept <player|*>"],
+      "aliases": ["etpaccept", "tpyes", "etpyes"],
+      "upstream": "tpaccept",
+      "notes": "Accepts latest, specific requester, or all pending requests."
+    },
+    {
+      "name": "tpdeny",
+      "usages": ["/tpdeny", "/tpdeny <player|*>"],
+      "aliases": ["etpdeny", "tpno", "etpno"],
+      "upstream": "tpdeny",
+      "notes": "Denies latest, specific requester, or all pending requests."
+    },
+    {
+      "name": "tpacancel",
+      "usages": ["/tpacancel", "/tpacancel <player|*>"],
+      "aliases": ["etpacancel"],
+      "upstream": "tpacancel",
+      "notes": "Cancels caller outgoing request for one target or all targets."
+    },
+    {
+      "name": "tpaall",
+      "usages": ["/tpaall", "/tpaall <destination>"],
+      "aliases": ["etpaall"],
+      "upstream": "tpaall",
+      "notes": "Admin request-all-to-destination flow using Fabric online players."
+    },
+    {
+      "name": "tptoggle",
+      "usages": ["/tptoggle", "/tptoggle <on|off>", "/tptoggle <player> [on|off]"],
+      "aliases": ["etptoggle"],
+      "upstream": "tptoggle",
+      "notes": "Runtime teleport-request toggle; persistent per-player storage is not implemented yet."
+    },
+    {
+      "name": "tpauto",
+      "usages": ["/tpauto", "/tpauto <on|off>", "/tpauto <player> [on|off]"],
+      "aliases": ["etpauto"],
+      "upstream": "tpauto",
+      "notes": "Runtime auto-accept toggle for TPA requests."
+    },
+    {
+      "name": "tp",
+      "usages": ["/tp <target>", "/tp <target> <destination>", "/tp <target> <x y z> [dimension]"],
+      "aliases": ["tele", "etele", "teleport", "eteleport", "etp", "tp2p", "etp2p"],
+      "upstream": "tp",
+      "notes": "Admin direct teleport with display-name targets and coordinate support."
+    },
+    {
+      "name": "tphere",
+      "usages": ["/tphere <target>"],
+      "aliases": ["s", "etphere"],
+      "upstream": "tphere",
+      "notes": "Admin direct summon-to-self."
+    },
+    {
+      "name": "tpo",
+      "usages": ["/tpo <target>", "/tpo <target> <destination>", "/tpo <target> <x y z> [dimension]"],
+      "aliases": ["etpo"],
+      "upstream": "tpo",
+      "notes": "Admin direct teleport that bypasses /tptoggle state."
+    },
+    {
+      "name": "tpohere",
+      "usages": ["/tpohere <target>"],
+      "aliases": ["etpohere"],
+      "upstream": "tpohere",
+      "notes": "Admin summon-to-self that bypasses /tptoggle state."
+    },
+    {
+      "name": "tpall",
+      "usages": ["/tpall", "/tpall <target>"],
+      "aliases": ["etpall"],
+      "upstream": "tpall",
+      "notes": "Forced all-to-target teleport."
+    },
+    {
+      "name": "tppos",
+      "usages": ["/tppos <x y z> [dimension]"],
+      "aliases": ["etppos"],
+      "upstream": "tppos",
+      "notes": "No yaw/pitch/world-name syntax yet."
+    },
+    {
+      "name": "top",
+      "usages": ["/top"],
+      "aliases": ["etop"],
+      "upstream": "top",
+      "notes": "Heightmap-based safe-ish upward teleport for executor."
+    },
+    {
+      "name": "heal",
+      "usages": ["/heal", "/heal <player>"],
+      "aliases": ["eheal"],
+      "upstream": "heal",
+      "notes": "Admin self/target heal."
+    },
+    {
+      "name": "feed",
+      "usages": ["/feed", "/feed <player>"],
+      "aliases": ["eat", "eeat", "efeed"],
+      "upstream": "feed",
+      "notes": "Admin self/target feed."
+    },
+    {
+      "name": "fly",
+      "usages": ["/fly", "/fly <player>", "/fly <player> <true|false>"],
+      "aliases": ["efly"],
+      "upstream": "fly",
+      "notes": "Boolean syntax is currently Brigadier true/false rather than upstream on/off."
+    },
+    {
+      "name": "god",
+      "usages": ["/god", "/god <player>", "/god <player> <true|false>"],
+      "aliases": ["egod", "godmode", "egodmode", "tgm", "etgm"],
+      "upstream": "god",
+      "notes": "Boolean syntax is currently Brigadier true/false rather than upstream on/off."
+    },
+    {
+      "name": "gamemode",
+      "usages": ["/gamemode <mode> [player]", "/gm <mode> [player]", "/gms [player]", "/gmc [player]", "/gma [player]", "/gmsp [player]"],
+      "aliases": ["adventure", "eadventure", "adventuremode", "eadventuremode", "creative", "ecreative", "eecreative", "creativemode", "ecreativemode", "egamemode", "gm", "egm", "gma", "egma", "gmc", "egmc", "gms", "egms", "gmt", "egmt", "survival", "esurvival", "survivalmode", "esurvivalmode", "gmsp", "sp", "egmsp", "spec", "spectator"],
+      "upstream": "gamemode",
+      "notes": "Core modes and aliases exposed; no numeric mode syntax yet."
+    },
+    {
+      "name": "speed",
+      "usages": ["/speed <speed> [player]", "/speed walk <speed> [player]", "/speed fly <speed> [player]"],
+      "aliases": ["flyspeed", "eflyspeed", "fspeed", "efspeed", "espeed", "walkspeed", "ewalkspeed", "wspeed", "ewspeed"],
+      "upstream": "speed",
+      "notes": "0-10 Essentials-style speed mapping."
+    },
+    {
+      "name": "clearinventory",
+      "usages": ["/clearinventory", "/clearinventory <player>"],
+      "aliases": ["ci", "eci", "clean", "eclean", "clear", "eclear", "clearinvent", "eclearinvent", "eclearinventory"],
+      "upstream": "clearinventory",
+      "notes": "Clears all inventory for self/one target; confirmation toggle is supported, but item filters, amount, and wildcard are not complete yet."
+    },
+    {
+      "name": "clearinventoryconfirmtoggle",
+      "usages": ["/clearinventoryconfirmtoggle"],
+      "aliases": ["eclearinventoryconfirmtoggle", "clearinventoryconfirmoff", "eclearinventoryconfirmoff", "clearconfirmoff", "eclearconfirmoff", "clearconfirmon", "eclearconfirmon", "clearconfirm", "eclearconfirm"],
+      "upstream": "clearinventoryconfirmtoggle",
+      "notes": "Toggles whether the same inventory-clear command must be repeated before execution."
+    },
+    {
+      "name": "repair",
+      "usages": ["/repair", "/repair <player>", "/repair hand [player]", "/repair all [player]"],
+      "aliases": ["fix", "efix", "erepair"],
+      "upstream": "repair",
+      "notes": "Repairs held item or all damaged inventory items for online players."
+    },
+    {
+      "name": "more",
+      "usages": ["/more", "/more <count>"],
+      "aliases": ["emore"],
+      "upstream": "more",
+      "notes": "Fills the held stack up to max stack size or requested count."
+    },
+    {
+      "name": "itemdb",
+      "usages": ["/itemdb", "/itemdb <item>"],
+      "aliases": ["dura", "edura", "durability", "edurability", "eitemdb", "iteminfo", "eiteminfo", "itemno", "eitemno"],
+      "upstream": "itemdb",
+      "notes": "Reports Fabric item registry/data component information."
+    },
+    {
+      "name": "give",
+      "usages": ["/give <player> <item> [count]"],
+      "aliases": ["egive"],
+      "upstream": "give",
+      "notes": "Uses Fabric item argument parsing and online player targets."
+    },
+    {
+      "name": "item",
+      "usages": ["/item <item> [count]"],
+      "aliases": ["i", "eitem", "ei"],
+      "upstream": "item",
+      "notes": "Gives the caller a parsed Fabric item stack."
+    },
+    {
+      "name": "enchant",
+      "usages": ["/enchant <enchantment> [level]"],
+      "aliases": ["eenchant", "enchantment", "eenchantment"],
+      "upstream": "enchant",
+      "notes": "Applies or removes enchantments on the held stack using data components."
+    },
+    {
+      "name": "itemname",
+      "usages": ["/itemname <name>", "/itemname clear"],
+      "aliases": ["eitemname", "iname", "einame", "itemrename", "irename", "eitemrename", "eirename"],
+      "upstream": "itemname",
+      "notes": "Sets or clears held item custom name."
+    },
+    {
+      "name": "itemlore",
+      "usages": ["/itemlore add <text>", "/itemlore set <line> <text>", "/itemlore remove <line>", "/itemlore clear"],
+      "aliases": ["eitemlore", "lore", "elore", "ilore", "eilore"],
+      "upstream": "itemlore",
+      "notes": "Edits held item lore data component."
+    },
+    {
+      "name": "book",
+      "usages": ["/book title <title>", "/book author <author>"],
+      "aliases": ["ebook"],
+      "upstream": "book",
+      "notes": "Edits writable/written book title and author metadata."
+    },
+    {
+      "name": "potion",
+      "usages": ["/potion clear", "/potion <effect> [level] [durationSeconds]"],
+      "aliases": ["epotion", "elixer", "eelixer"],
+      "upstream": "potion",
+      "notes": "Admin command setting or clearing custom potion-effect data components on held potions, splash potions, lingering potions, and tipped arrows."
+    },
+    {
+      "name": "recipe",
+      "usages": ["/recipe <item>", "/recipe <item> <page>"],
+      "aliases": ["formula", "eformula", "method", "emethod", "erecipe", "recipes", "erecipes"],
+      "upstream": "recipe",
+      "notes": "Searches the loaded Fabric recipe registry for matching recipe ids/displays and pages the matching recipe ids."
+    },
+    {
+      "name": "skull",
+      "usages": ["/skull", "/skull <owner>", "/skull <owner> <player>"],
+      "aliases": ["eskull", "playerskull", "eplayerskull"],
+      "upstream": "skull",
+      "notes": "Creates player-head items with unresolved vanilla profiles. The upstream head/ehead aliases remain assigned to /hat because EssentialsX declares that alias collision too."
+    },
+    {
+      "name": "hat",
+      "usages": ["/hat", "/hat remove"],
+      "aliases": ["ehat", "head", "ehead"],
+      "upstream": "hat",
+      "notes": "Equips held item as helmet or removes current helmet."
+    },
+    {
+      "name": "enderchest",
+      "usages": ["/enderchest", "/enderchest <player>"],
+      "aliases": ["echest", "eechest", "eenderchest", "endersee", "eendersee", "ec", "eec"],
+      "upstream": "enderchest",
+      "notes": "Opens self/online target ender chest."
+    },
+    {
+      "name": "ext",
+      "usages": ["/ext", "/ext <player>"],
+      "aliases": ["eext", "extinguish", "eextinguish"],
+      "upstream": "ext",
+      "notes": "Extinguishes self/target."
+    },
+    {
+      "name": "near",
+      "usages": ["/near", "/near <radius>", "/near <player> [radius]"],
+      "aliases": ["enear", "nearby", "enearby"],
+      "upstream": "near",
+      "notes": "Lists players near the executor or an online target."
+    },
+    {
+      "name": "ping",
+      "usages": ["/ping", "/ping <message>"],
+      "aliases": ["echo", "eecho", "eping", "pong", "epong"],
+      "upstream": "ping",
+      "notes": "Pong or echo message."
+    },
+    {
+      "name": "getpos",
+      "usages": ["/getpos", "/getpos <player>"],
+      "aliases": ["coords", "egetpos", "position", "eposition", "whereami", "ewhereami", "getlocation", "egetlocation", "getloc", "egetloc"],
+      "upstream": "getpos",
+      "notes": "Coordinate reporting for self/admin target."
+    },
+    {
+      "name": "depth",
+      "usages": ["/depth"],
+      "aliases": ["edepth", "height", "eheight"],
+      "upstream": "depth",
+      "notes": "Compares executor Y to dimension sea level."
+    },
+    {
+      "name": "compass",
+      "usages": ["/compass"],
+      "aliases": ["ecompass", "direction", "edirection"],
+      "upstream": "compass",
+      "notes": "Reports bearing and direction."
+    },
+    {
+      "name": "suicide",
+      "usages": ["/suicide"],
+      "aliases": ["esuicide"],
+      "upstream": "suicide",
+      "notes": "Kills executor and broadcasts a death-style message."
+    },
+    {
+      "name": "kill",
+      "usages": ["/kill <player>"],
+      "aliases": ["ekill"],
+      "upstream": "kill",
+      "notes": "Admin online target kill."
+    },
+    {
+      "name": "sudo",
+      "usages": ["/sudo <player> <command>", "/sudo <player> c:<message>"],
+      "aliases": ["esudo"],
+      "upstream": "sudo",
+      "notes": "Runs a command as an online target; c: broadcasts an unsigned server-side chat-style message."
+    },
+    {
+      "name": "time",
+      "usages": ["/time", "/time <time> [dimension]", "/time set <time> [dimension]", "/time add <ticks> [dimension]", "/day", "/night"],
+      "aliases": ["day", "eday", "night", "enight", "etime"],
+      "upstream": "time",
+      "notes": "Uses Minecraft 26 clock API; supports named/tick/12h/24h values and dimension argument, not all/world selector yet."
+    },
+    {
+      "name": "weather",
+      "usages": ["/weather <storm|sun> [seconds]", "/sun [seconds]", "/storm [seconds]"],
+      "aliases": ["rain", "erain", "sky", "esky", "storm", "estorm", "sun", "esun", "eweather"],
+      "upstream": "weather",
+      "notes": "Global server weather API; console world form not implemented."
+    },
+    {
+      "name": "thunder",
+      "usages": ["/thunder <true|false> [seconds]"],
+      "aliases": ["ethunder"],
+      "upstream": "thunder",
+      "notes": "Direct thunder toggle with duration."
+    },
+    {
+      "name": "broadcast",
+      "usages": ["/broadcast <message>"],
+      "aliases": ["bc", "ebc", "bcast", "ebcast", "ebroadcast", "shout", "eshout", "alert"],
+      "upstream": "broadcast",
+      "notes": "Global broadcast; alert is Fabric extra."
+    },
+    {
+      "name": "broadcastworld",
+      "usages": ["/broadcastworld <dimension> <message>"],
+      "aliases": ["bcw", "ebcw", "bcastw", "ebcastw", "ebroadcastworld", "shoutworld", "eshoutworld"],
+      "upstream": "broadcastworld",
+      "notes": "Dimension-scoped broadcast using Brigadier dimension argument."
+    },
+    {
+      "name": "burn",
+      "usages": ["/burn <player> <seconds>"],
+      "aliases": ["eburn"],
+      "upstream": "burn",
+      "notes": "Sets online target fire ticks."
+    },
+    {
+      "name": "rest",
+      "usages": ["/rest", "/rest <player>"],
+      "aliases": ["erest"],
+      "upstream": "rest",
+      "notes": "Resets TIME_SINCE_REST and air supply for self/online target."
+    },
+    {
+      "name": "list",
+      "usages": ["/list"],
+      "aliases": ["elist", "online", "eonline", "playerlist", "eplayerlist", "plist", "eplist", "who", "ewho"],
+      "upstream": "list",
+      "notes": "Lists online players without group/vanish integration yet."
+    },
+    {
+      "name": "gc",
+      "usages": ["/gc"],
+      "aliases": ["lag", "elag", "egc", "mem", "emem", "memory", "ememory", "uptime", "euptime", "tps", "etps", "entities", "eentities"],
+      "upstream": "gc",
+      "notes": "Reports uptime, TPS/MSPT, memory, loaded chunks, and entity counts."
+    },
+    {
+      "name": "renamehome",
+      "usages": ["/renamehome <old> <new>"],
+      "aliases": ["erenamehome"],
+      "upstream": "renamehome",
+      "notes": "Renames one of the caller's saved homes."
+    },
+    {
+      "name": "warpinfo",
+      "usages": ["/warpinfo <warp>"],
+      "aliases": ["ewarpinfo"],
+      "upstream": "warpinfo",
+      "notes": "Admin warp location inspection."
+    },
+    {
+      "name": "world",
+      "usages": ["/world", "/world <dimension>"],
+      "aliases": ["eworld"],
+      "upstream": "world",
+      "notes": "Cycles or changes dimension with basic coordinate scaling."
+    },
+    {
+      "name": "jump",
+      "usages": ["/jump"],
+      "aliases": ["j", "ej", "ejump", "jumpto", "ejumpto"],
+      "upstream": "jump",
+      "notes": "Raycast teleport to the block the caller is looking at."
+    },
+    {
+      "name": "bottom",
+      "usages": ["/bottom"],
+      "aliases": ["ebottom"],
+      "upstream": "bottom",
+      "notes": "Teleports caller downward to the nearest safe block."
+    },
+    {
+      "name": "workbench",
+      "usages": ["/workbench"],
+      "aliases": ["craft", "ecraft", "wb", "ewb", "wbench", "ewbench", "eworkbench"],
+      "upstream": "workbench",
+      "notes": "Opens a virtual crafting table menu."
+    },
+    {
+      "name": "anvil",
+      "usages": ["/anvil"],
+      "aliases": ["eanvil"],
+      "upstream": "anvil",
+      "notes": "Opens a virtual anvil menu."
+    },
+    {
+      "name": "cartographytable",
+      "usages": ["/cartographytable"],
+      "aliases": ["ecartographytable", "carttable", "ecarttable"],
+      "upstream": "cartographytable",
+      "notes": "Opens a virtual cartography table menu."
+    },
+    {
+      "name": "grindstone",
+      "usages": ["/grindstone"],
+      "aliases": ["egrindstone"],
+      "upstream": "grindstone",
+      "notes": "Opens a virtual grindstone menu."
+    },
+    {
+      "name": "loom",
+      "usages": ["/loom"],
+      "aliases": ["eloom"],
+      "upstream": "loom",
+      "notes": "Opens a virtual loom menu."
+    },
+    {
+      "name": "smithingtable",
+      "usages": ["/smithingtable"],
+      "aliases": ["esmithingtable", "smithtable", "esmithtable"],
+      "upstream": "smithingtable",
+      "notes": "Opens a virtual smithing table menu."
+    },
+    {
+      "name": "stonecutter",
+      "usages": ["/stonecutter"],
+      "aliases": ["estonecutter"],
+      "upstream": "stonecutter",
+      "notes": "Opens a virtual stonecutter menu."
+    },
+    {
+      "name": "disposal",
+      "usages": ["/disposal"],
+      "aliases": ["edisposal", "trash", "etrash"],
+      "upstream": "disposal",
+      "notes": "Opens a discard chest menu."
+    },
+    {
+      "name": "playtime",
+      "usages": ["/playtime", "/playtime <player>"],
+      "aliases": ["eplaytime"],
+      "upstream": "playtime",
+      "notes": "Uses Minecraft play-time stat for online players."
+    },
+    {
+      "name": "seen",
+      "usages": ["/seen <player>"],
+      "aliases": ["eseen", "ealts", "alts"],
+      "upstream": "seen",
+      "notes": "Runtime session-backed seen lookup with cached profile fallback."
+    },
+    {
+      "name": "whois",
+      "usages": ["/whois <player>"],
+      "aliases": ["ewhois"],
+      "upstream": "whois",
+      "notes": "Admin online player inspection."
+    },
+    {
+      "name": "realname",
+      "usages": ["/realname <query>"],
+      "aliases": ["erealname"],
+      "upstream": "realname",
+      "notes": "Matches online display names to account names."
+    },
+    {
+      "name": "msg",
+      "usages": ["/msg <player> <message>"],
+      "aliases": ["w", "m", "t", "pm", "emsg", "epm", "tell", "etell", "whisper", "ewhisper"],
+      "upstream": "msg",
+      "notes": "Fabric private messages for online players/display names; respects ignore, msgtoggle, AFK notices, reply tracking, and socialspy."
+    },
+    {
+      "name": "r",
+      "usages": ["/r <message>"],
+      "aliases": ["er", "reply", "ereply"],
+      "upstream": "r",
+      "notes": "Replies to the runtime reply target tracked by /msg and /rtoggle."
+    },
+    {
+      "name": "ignore",
+      "usages": ["/ignore", "/ignore <player>"],
+      "aliases": ["eignore", "unignore", "eunignore", "delignore", "edelignore", "remignore", "eremignore", "rmignore", "ermignore"],
+      "upstream": "ignore",
+      "notes": "Durable local online-player ignore list used by /msg and /me."
+    },
+    {
+      "name": "msgtoggle",
+      "usages": ["/msgtoggle", "/msgtoggle <on|off>", "/msgtoggle <player> [on|off]"],
+      "aliases": ["emsgtoggle"],
+      "upstream": "msgtoggle",
+      "notes": "Durable local receive-private-message toggle; admin senders bypass the receive toggle."
+    },
+    {
+      "name": "rtoggle",
+      "usages": ["/rtoggle", "/rtoggle <on|off>", "/rtoggle <player> [on|off]"],
+      "aliases": ["ertoggle", "replytoggle", "ereplytoggle"],
+      "upstream": "rtoggle",
+      "notes": "Durable local reply mode toggle: on keeps the first last-recipient target, off tracks the latest sender."
+    },
+    {
+      "name": "socialspy",
+      "usages": ["/socialspy", "/socialspy <on|off>", "/socialspy <player> [on|off]"],
+      "aliases": ["esocialspy"],
+      "upstream": "socialspy",
+      "notes": "Admin-only durable local spy toggle for /msg and /mail activity."
+    },
+    {
+      "name": "helpop",
+      "usages": ["/helpop <message>"],
+      "aliases": ["ac", "eac", "amsg", "eamsg", "ehelpop"],
+      "upstream": "helpop",
+      "notes": "Broadcasts a help request to online players with the configured admin permission level and logs it server-side."
+    },
+    {
+      "name": "me",
+      "usages": ["/me <description>"],
+      "aliases": ["action", "eaction", "describe", "edescribe", "eme"],
+      "upstream": "me",
+      "notes": "Broadcasts a Fabric action message to online players, respecting local /ignore for player senders."
+    },
+    {
+      "name": "afk",
+      "usages": ["/afk", "/afk <message>", "/afk <player> [message]"],
+      "aliases": ["eafk", "away", "eaway"],
+      "upstream": "afk",
+      "notes": "Runtime AFK status with optional message, admin target support, broadcast transitions, and /msg AFK notices."
+    },
+    {
+      "name": "mail",
+      "usages": ["/mail", "/mail read [page]", "/mail send <player> <message>", "/mail sendall <message>", "/mail clear", "/mail clear <number>", "/mail delete <number>", "/mail clearall"],
+      "aliases": ["email", "eemail", "memo", "ememo"],
+      "upstream": "mail",
+      "notes": "Durable local Fabric mail store for online, cached-profile, or name-keyed recipients; sendtemp expiry and offline Bukkit user migration are not implemented."
+    },
+    {
+      "name": "nick",
+      "usages": ["/nick <nickname|off>", "/nick <player> <nickname|off>"],
+      "aliases": ["enick", "nickname", "enickname"],
+      "upstream": "nick",
+      "notes": "Durable server-side entity custom/display nickname for online players. Full Bukkit tab-list and signed-chat display-name parity needs a mixin/packet bridge."
+    },
+    {
+      "name": "toggleshout",
+      "usages": ["/toggleshout", "/toggleshout <on|off>", "/toggleshout <player> [on|off]"],
+      "aliases": ["etoggleshout"],
+      "upstream": "toggleshout",
+      "notes": "Durable local shout preference only; mod-roleplay owns live roleplay chat formatting."
+    },
+    {
+      "name": "motd",
+      "usages": ["/motd", "/motd <page>"],
+      "aliases": ["emotd"],
+      "upstream": "motd",
+      "notes": "Displays configurable text from config/mod_essentials/text/motd.txt."
+    },
+    {
+      "name": "rules",
+      "usages": ["/rules", "/rules <page>"],
+      "aliases": ["erules"],
+      "upstream": "rules",
+      "notes": "Displays configurable text from config/mod_essentials/text/rules.txt."
+    },
+    {
+      "name": "info",
+      "usages": ["/info", "/info <chapter|page>", "/info <chapter> <page>"],
+      "aliases": ["about", "eabout", "ifo", "eifo", "einfo", "inform", "einform", "news", "enews"],
+      "upstream": "info",
+      "notes": "Displays configurable text from config/mod_essentials/text/info.txt or chapter files."
+    },
+    {
+      "name": "ban",
+      "usages": ["/ban <player> [reason]"],
+      "aliases": ["eban"],
+      "upstream": "ban",
+      "notes": "Admin command backed by Minecraft's UserBanList; online targets are disconnected immediately."
+    },
+    {
+      "name": "tempban",
+      "usages": ["/tempban <player> <duration> [reason]"],
+      "aliases": ["etempban"],
+      "upstream": "tempban",
+      "notes": "Admin command backed by Minecraft's expiring UserBanListEntry; accepts s/m/h/d/w/M/y durations."
+    },
+    {
+      "name": "unban",
+      "usages": ["/unban <player>"],
+      "aliases": ["eunban", "pardon", "epardon"],
+      "upstream": "unban",
+      "notes": "Removes a local Minecraft user ban."
+    },
+    {
+      "name": "banip",
+      "usages": ["/banip <ip|online-player> [reason]"],
+      "aliases": ["ebanip"],
+      "upstream": "banip",
+      "notes": "Admin command backed by Minecraft's IpBanList; matching online players are disconnected."
+    },
+    {
+      "name": "tempbanip",
+      "usages": ["/tempbanip <ip|online-player> <duration> [reason]"],
+      "aliases": ["etempbanip"],
+      "upstream": "tempbanip",
+      "notes": "Expiring IP ban backed by Minecraft's IpBanListEntry."
+    },
+    {
+      "name": "unbanip",
+      "usages": ["/unbanip <ip>"],
+      "aliases": ["eunbanip", "pardonip", "epardonip"],
+      "upstream": "unbanip",
+      "notes": "Removes a local Minecraft IP ban."
+    },
+    {
+      "name": "kick",
+      "usages": ["/kick <player> [reason]"],
+      "aliases": ["ekick"],
+      "upstream": "kick",
+      "notes": "Disconnects one online player through the server connection."
+    },
+    {
+      "name": "kickall",
+      "usages": ["/kickall [reason]"],
+      "aliases": ["ekickall"],
+      "upstream": "kickall",
+      "notes": "Disconnects all online players except the player command sender."
+    },
+    {
+      "name": "mute",
+      "usages": ["/mute <player>", "/mute <player> <duration|perm|off> [reason]"],
+      "aliases": ["emute", "silence", "esilence", "unmute", "eunmute"],
+      "upstream": "mute",
+      "notes": "Durable local mute state in config/mod_essentials/mutes.properties enforced through Fabric's server chat and signed command-message allow events."
+    },
+    {
+      "name": "setjail",
+      "usages": ["/setjail <name>"],
+      "aliases": ["esetjail", "createjail", "ecreatejail"],
+      "upstream": "setjail",
+      "notes": "Admin command storing a named StoredLocation-style jail in config/mod_essentials/jails.properties."
+    },
+    {
+      "name": "deljail",
+      "usages": ["/deljail <name>"],
+      "aliases": ["edeljail", "remjail", "eremjail", "rmjail", "ermjail"],
+      "upstream": "deljail",
+      "notes": "Deletes a named jail location."
+    },
+    {
+      "name": "togglejail",
+      "usages": ["/togglejail <player>", "/togglejail <player> <jail> [reason]"],
+      "aliases": ["etogglejail", "jail", "ejail", "tjail", "etjail", "unjail", "eunjail"],
+      "upstream": "togglejail",
+      "notes": "Durable local jail assignment with online teleport and server-tick jail-boundary enforcement."
+    },
+    {
+      "name": "jails",
+      "usages": ["/jails"],
+      "aliases": ["ejails"],
+      "upstream": "jails",
+      "notes": "Lists local jail locations."
+    },
+    {
+      "name": "jailedplayers",
+      "usages": ["/jailedplayers"],
+      "aliases": ["ejailedplayers", "ejailed", "ejp"],
+      "upstream": "jailedplayers",
+      "notes": "Lists locally jailed players."
+    },
+    {
+      "name": "tpr",
+      "usages": ["/tpr", "/tpr <player>"],
+      "aliases": ["etpr", "tprandom", "etprandom", "rtp", "ertp", "wild", "ewild"],
+      "upstream": "tpr",
+      "notes": "Random teleport into the configured area with world-border, liquid, collision, and floor safety checks."
+    },
+    {
+      "name": "settpr",
+      "usages": ["/settpr", "/settpr <maxRadius>", "/settpr <maxRadius> <minRadius>", "/settpr clear"],
+      "aliases": ["esettpr", "settprandom", "esettprandom"],
+      "upstream": "settpr",
+      "notes": "Admin command configuring random teleport center/radius from the sender's current location."
+    },
+    {
+      "name": "kit",
+      "usages": ["/kit", "/kit <kit>", "/kit <kit> <player>"],
+      "aliases": ["ekit", "kits", "ekits"],
+      "upstream": "kit",
+      "notes": "Durable local NBT-backed kits with per-player cooldowns; admin target delivery bypasses self cooldown."
+    },
+    {
+      "name": "createkit",
+      "usages": ["/createkit <kit>", "/createkit <kit> <cooldownSeconds>"],
+      "aliases": ["ecreatekit", "kitcreate", "createk", "kc", "ck"],
+      "upstream": "createkit",
+      "notes": "Admin command snapshots the sender's online inventory, armor, and offhand into a component-preserving Fabric kit file."
+    },
+    {
+      "name": "delkit",
+      "usages": ["/delkit <kit>"],
+      "aliases": ["edelkit", "removekit", "eremovekit", "remkit", "eremkit", "rmkit", "ermkit", "deletekit", "edeletekit"],
+      "upstream": "delkit",
+      "notes": "Deletes a local kit and its cooldown entries."
+    },
+    {
+      "name": "showkit",
+      "usages": ["/showkit <kit>"],
+      "aliases": ["eshowkit", "kitpreview", "preview", "kitshow"],
+      "upstream": "showkit",
+      "notes": "Lists stored kit stacks and cooldown."
+    },
+    {
+      "name": "kitreset",
+      "usages": ["/kitreset <kit>", "/kitreset <kit> <player>"],
+      "aliases": ["ekitreset", "kitr", "ekitr", "resetkit", "eresetkit"],
+      "upstream": "kitreset",
+      "notes": "Admin command clearing durable kit cooldown state for online targets."
+    },
+    {
+      "name": "invsee",
+      "usages": ["/invsee <player>"],
+      "aliases": ["einvsee"],
+      "upstream": "invsee",
+      "notes": "Admin command opening a live online target inventory in a padded six-row Fabric container."
+    },
+    {
+      "name": "exp",
+      "usages": ["/exp", "/exp show [player]", "/exp set <amount> [player]", "/exp set <player> <amount>", "/exp give <amount> [player]", "/exp give <player> <amount>", "/exp reset [player]"],
+      "aliases": ["eexp", "xp", "experience", "eexperience"],
+      "upstream": "exp",
+      "notes": "Admin point-based experience show/set/give/reset for online players."
+    },
+    {
+      "name": "ptime",
+      "usages": ["/ptime", "/ptime <time|reset>", "/ptime <time|reset> <player>"],
+      "aliases": ["eptime", "playertime", "eplayertime"],
+      "upstream": "ptime",
+      "notes": "Persistent player-specific clock packet preference; reset restores server clock sync."
+    },
+    {
+      "name": "pweather",
+      "usages": ["/pweather", "/pweather <sun|storm|reset>", "/pweather <sun|storm|reset> <player>"],
+      "aliases": ["epweather", "playerweather", "eplayerweather"],
+      "upstream": "pweather",
+      "notes": "Persistent player-specific weather packet preference for online players."
+    },
+    {
+      "name": "condense",
+      "usages": ["/condense"],
+      "aliases": ["econdense", "compact", "ecompact", "blocks", "eblocks", "toblocks", "etoblocks"],
+      "upstream": "condense",
+      "notes": "Converts common vanilla nuggets/ingots/gems/raw resources into compacted forms when stacks have no custom components."
+    },
+    {
+      "name": "unlimited",
+      "usages": ["/unlimited", "/unlimited <item>", "/unlimited list", "/unlimited clear"],
+      "aliases": ["eunlimited", "ul", "unl", "eul", "eunl"],
+      "upstream": "unlimited",
+      "notes": "Admin durable per-player unlimited held-item refill implemented through server ticks."
+    },
+    {
+      "name": "powertool",
+      "usages": ["/powertool <command>", "/powertool clear"],
+      "aliases": ["epowertool", "pt", "ept"],
+      "upstream": "powertool",
+      "notes": "Admin durable right-click command binding for the held item type."
+    },
+    {
+      "name": "powertoollist",
+      "usages": ["/powertoollist"],
+      "aliases": ["epowertoollist", "ptlist", "eptlist"],
+      "upstream": "powertoollist",
+      "notes": "Lists the caller's durable powertool bindings."
+    },
+    {
+      "name": "powertooltoggle",
+      "usages": ["/powertooltoggle", "/powertooltoggle <on|off>", "/powertooltoggle <player> [on|off]"],
+      "aliases": ["epowertooltoggle", "ptt", "eptt", "pttoggle", "epttoggle"],
+      "upstream": "powertooltoggle",
+      "notes": "Admin toggle for durable powertool execution state."
+    },
+    {
+      "name": "backup",
+      "usages": ["/backup"],
+      "aliases": ["ebackup"],
+      "upstream": "backup",
+      "notes": "Admin command invoking synchronous player and world saves; external shell backup command integration is not configured in this Fabric port."
+    },
+    {
+      "name": "customtext",
+      "usages": ["/customtext", "/customtext <name>", "/customtext <name> <page>"],
+      "aliases": ["ecustomtext", "ctext", "ectext"],
+      "upstream": "customtext",
+      "notes": "Reads paginated UTF-8 text files from config/mod_essentials/text/custom."
+    },
+    {
+      "name": "help",
+      "usages": ["/help", "/ehelp", "/ehelp <query|page>", "/ehelp <query> <page>"],
+      "aliases": ["ehelp", "esshelp", "essentialshelp"],
+      "upstream": "help",
+      "notes": "Keeps vanilla /help when already present; Essentials aliases page the live Brigadier command tree."
+    },
+    {
+      "name": "lightning",
+      "usages": ["/lightning", "/lightning <player> [power]"],
+      "aliases": ["elightning", "shock", "eshock", "smite", "esmite", "strike", "estrike", "thor", "ethor"],
+      "upstream": "lightning",
+      "notes": "Spawns lightning at the looked block or at an online target."
+    },
+    {
+      "name": "antioch",
+      "usages": ["/antioch", "/antioch <amount>"],
+      "aliases": ["eantioch", "grenade", "egrenade", "tnt", "etnt"],
+      "upstream": "antioch",
+      "notes": "Throws one or more primed TNT entities from the caller."
+    },
+    {
+      "name": "nuke",
+      "usages": ["/nuke", "/nuke <amount>"],
+      "aliases": ["enuke"],
+      "upstream": "nuke",
+      "notes": "Drops a cluster of primed TNT entities over the looked location."
+    },
+    {
+      "name": "fireball",
+      "usages": ["/fireball", "/fireball <power>"],
+      "aliases": ["efireball", "fireentity", "efireentity", "fireskull", "efireskull"],
+      "upstream": "fireball",
+      "notes": "Launches a large fireball from the caller."
+    },
+    {
+      "name": "beezooka",
+      "usages": ["/beezooka"],
+      "aliases": ["ebeezooka", "beecannon", "ebeecannon"],
+      "upstream": "beezooka",
+      "notes": "Launches a bee entity from the caller."
+    },
+    {
+      "name": "kittycannon",
+      "usages": ["/kittycannon"],
+      "aliases": ["ekittycannon"],
+      "upstream": "kittycannon",
+      "notes": "Launches a cat entity from the caller."
+    },
+    {
+      "name": "break",
+      "usages": ["/break"],
+      "aliases": ["ebreak"],
+      "upstream": "break",
+      "notes": "Breaks the block the caller is looking at."
+    },
+    {
+      "name": "ice",
+      "usages": ["/ice", "/ice <player>"],
+      "aliases": ["eice", "freeze", "efreeze"],
+      "upstream": "ice",
+      "notes": "Applies vanilla freeze ticks to caller or online target."
+    },
+    {
+      "name": "tree",
+      "usages": ["/tree", "/tree <type>"],
+      "aliases": ["etree"],
+      "upstream": "tree",
+      "notes": "Places a vanilla configured tree feature at the looked block; supports common Essentials tree type names."
+    },
+    {
+      "name": "bigtree",
+      "usages": ["/bigtree", "/bigtree <type>"],
+      "aliases": ["ebigtree", "largetree", "elargetree"],
+      "upstream": "bigtree",
+      "notes": "Places a larger vanilla configured tree feature at the looked block where a large variant exists."
+    },
+    {
+      "name": "spawnmob",
+      "usages": ["/spawnmob <entity> [amount] [player]"],
+      "aliases": ["mob", "emob", "spawnentity", "espawnentity", "espawnmob"],
+      "upstream": "spawnmob",
+      "notes": "Spawns summonable Fabric entity types near caller or online target."
+    },
+    {
+      "name": "spawner",
+      "usages": ["/spawner <entity>"],
+      "aliases": ["espawner", "changems", "echangems", "mobspawner", "emobspawner"],
+      "upstream": "spawner",
+      "notes": "Changes the looked mob spawner block to a summonable Fabric entity type using the vanilla spawner block entity API."
+    },
+    {
+      "name": "editsign",
+      "usages": ["/editsign set <line> <text>", "/editsign clear", "/editsign clear <line>", "/editsign <line> <text>"],
+      "aliases": ["sign", "esign", "eeditsign"],
+      "upstream": "editsign",
+      "notes": "Admin command editing the front/back text of the sign block the caller is looking at through the vanilla sign block entity API."
+    },
+    {
+      "name": "remove",
+      "usages": ["/remove <all|mobs|monsters|animals|drops|entity> [radius]"],
+      "aliases": ["eremove", "butcher", "ebutcher", "killall", "ekillall", "mobkill", "emobkill"],
+      "upstream": "remove",
+      "notes": "Removes nearby non-player entities matching a broad category or registry id."
+    },
+    {
+      "name": "firework",
+      "usages": ["/firework", "/firework <meta>", "/firework clear", "/firework power <0-4>", "/firework fire [amount]"],
+      "aliases": ["efirework"],
+      "upstream": "firework",
+      "notes": "Edits held firework rocket data components and can launch copies from the caller. Metadata supports color, fade, shape, effect, and power tokens."
+    },
+    {
+      "name": "vanish",
+      "usages": ["/vanish", "/vanish <player>", "/vanish <player> <on|off>"],
+      "aliases": ["v", "ev", "evanish"],
+      "upstream": "vanish",
+      "notes": "Admin command toggling the vanilla invisible flag for online players. Full Bukkit/Paper vanished-player tracking requires a packet/list hook."
+    },
+    {
+      "name": "discordbroadcast",
+      "usages": ["/discordbroadcast <channel> <message>"],
+      "aliases": ["dbroadcast", "dbc", "dbcast", "ediscordbroadcast", "edbroadcast", "edbc", "edbcast"],
+      "upstream": "discordbroadcast",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsX Discord broadcast is not configured until a Fabric Discord bridge module is wired."
+    },
+    {
+      "name": "discord",
+      "usages": ["/discord"],
+      "aliases": ["ediscord"],
+      "upstream": "discord",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsX Discord is not configured until a Fabric Discord bridge module is wired."
+    },
+    {
+      "name": "link",
+      "usages": ["/link"],
+      "aliases": ["elink", "discordlink", "ediscordlink"],
+      "upstream": "link",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsX DiscordLink is not configured until a Fabric Discord account-link bridge is wired."
+    },
+    {
+      "name": "unlink",
+      "usages": ["/unlink"],
+      "aliases": ["eunlink", "discordunlink", "ediscordunlink"],
+      "upstream": "unlink",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsX DiscordLink is not configured until a Fabric Discord account-link bridge is wired."
+    },
+    {
+      "name": "setxmpp",
+      "usages": ["/setxmpp <address>"],
+      "aliases": [],
+      "upstream": "setxmpp",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsXMPP is not configured."
+    },
+    {
+      "name": "xmpp",
+      "usages": ["/xmpp <player> <message>"],
+      "aliases": [],
+      "upstream": "xmpp",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsXMPP is not configured."
+    },
+    {
+      "name": "xmppspy",
+      "usages": ["/xmppspy <player>"],
+      "aliases": [],
+      "upstream": "xmppspy",
+      "notes": "Registered as an explicit compatibility root that reports EssentialsXMPP spy is not configured."
+    },
+    {
+      "name": "tpoffline",
+      "usages": ["/tpoffline <player>"],
+      "aliases": ["otp", "offlinetp", "tpoff", "etpoffline"],
+      "upstream": "tpoffline",
+      "notes": "Registered as an explicit unsupported command; offline player NBT mutation is unsafe in this Fabric port without a dedicated player-data DataFixer/save bridge."
+    }
+  ]
+}
