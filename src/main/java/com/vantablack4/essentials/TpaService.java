@@ -2,6 +2,7 @@ package com.vantablack4.essentials;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -39,12 +40,17 @@ public final class TpaService {
 
     private final EssentialsConfig config;
     private final BackService backService;
-    private final TeleportStateService teleportState = new TeleportStateService();
+    private final TeleportStateService teleportState;
     private final Map<UUID, Map<UUID, TeleportRequest>> pendingByTarget = new ConcurrentHashMap<>();
 
     public TpaService(EssentialsConfig config, BackService backService) {
+        this(config, backService, config.configDirectory().resolve("teleport-state.properties"));
+    }
+
+    TpaService(EssentialsConfig config, BackService backService, Path teleportStateFile) {
         this.config = config;
         this.backService = backService;
+        this.teleportState = new TeleportStateService(teleportStateFile);
     }
 
     public RequestResult request(MinecraftServer server, ServerPlayer requester, ServerPlayer target, RequestType type) {

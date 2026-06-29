@@ -18,8 +18,10 @@ Included command groups:
 
 - Status/help: `/vessentials`, `/essentials`
 - Spawn: `/spawn`, `/setspawn`
-- Homes: `/home [name]`, `/sethome [name]`, `/delhome <name>`, `/homes`
-- Warps: `/warp [name]`, `/warps`, `/setwarp <name>`, `/delwarp <name>`
+- Homes: `/home [name]`, `/home <player>:<name>`, `/sethome [name]`,
+  `/delhome <name>`, `/delhome <player>:<name>`, `/homes`
+- Warps: `/warp [name|page]`, `/warps [page]`, `/setwarp <name>`,
+  `/delwarp <name>`
 - Return/requests: `/back`, `/tpa`, `/tpask`, `/tpahere`, `/tpaall`,
   `/tpaccept`, `/tpyes`, `/tpdeny`, `/tpno`, `/tpacancel`, `/tpauto`,
   `/tptoggle`
@@ -32,7 +34,7 @@ Included command groups:
   `/disposal`, `/workbench`, `/anvil`, `/cartographytable`, `/grindstone`,
   `/loom`, `/smithingtable`, `/stonecutter`
 - Item/meta: `/more`, `/itemdb`, `/give`, `/item`, `/i`, `/enchant`,
-  `/itemname`, `/itemlore`, `/book title`, `/book author`, `/potion`,
+  `/itemname`, `/itemlore`, `/book`, `/book title`, `/book author`, `/potion`,
   `/recipe`, `/skull`
 - Economy: `/balance`, `/balancetop`, `/pay`, `/paytoggle`,
   `/payconfirmtoggle`, `/eco`, `/worth`, `/setworth`, `/sell`
@@ -69,14 +71,16 @@ Fabric compatibility boundaries:
   `plugin.yml` files are registered. See `docs/essentialsx-parity.md` for exact
   coverage and usage differences.
 - Bukkit/Paper-only integrations such as Vault, LuckPerms, EssentialsX Discord,
-  DiscordLink, and XMPP are exposed as explicit compatibility roots where no
-  Fabric bridge exists yet.
-- Offline player inventory/location mutation is not performed. Fabric has no
-  safe Bukkit-style offline player edit API without a dedicated player-data
-  DataFixer/save bridge.
-- Upstream message bundles are retained under `src/main/resources/essentialsx`.
-  Command output is still being moved from Fabric-local strings onto the
-  upstream message keys.
+  DiscordLink, XMPP, Bukkit event hooks, and full display-name packet/list
+  behavior need Fabric-specific bridge or mixin modules. Compatibility command
+  roots are registered where no bridge exists yet.
+- `/tpoffline` teleports to logout locations observed by this Fabric port.
+  Generic offline player inventory/NBT mutation is still avoided unless a
+  dedicated player-data DataFixer/save bridge is added.
+- Upstream message bundles and default EssentialsX resources are retained under
+  `src/main/resources/essentialsx`, including `config.yml`, messages, MOTD,
+  rules, info, kits, worth, item databases, custom items, book defaults, TPR
+  defaults, and the upstream release marker.
 
 ## Configuration
 
@@ -101,7 +105,9 @@ State is stored in the same directory:
 - `kits/`
 - `mail.properties`
 - `social-state.properties`
+- `teleport-state.properties`
 - `mutes.properties`
+- `logout-locations.properties`
 - `jails.properties`
 - `jail-state.properties`
 - `random-teleport.properties`

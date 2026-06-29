@@ -133,7 +133,7 @@ public final class PlayerUtilityCommands {
         registerAll(dispatcher, this::expCommand, "exp", "eexp", "xp", "experience", "eexperience");
         registerAll(dispatcher, this::ptimeCommand, "ptime", "eptime", "playertime", "eplayertime");
         registerAll(dispatcher, this::pweatherCommand, "pweather", "epweather", "playerweather", "eplayerweather");
-        registerAll(dispatcher, this::condenseCommand, "condense", "econdense", "compact", "ecompact", "blocks", "eblocks", "toblocks", "etoblocks");
+        registerAll(dispatcher, name -> condenseCommand(name, registryAccess), "condense", "econdense", "compact", "ecompact", "blocks", "eblocks", "toblocks", "etoblocks");
         registerAll(dispatcher, name -> unlimitedCommand(name, registryAccess), "unlimited", "eunlimited", "ul", "unl", "eul", "eunl");
         registerAll(dispatcher, this::powerToolCommand, "powertool", "epowertool", "pt", "ept");
         registerAll(dispatcher, this::powerToolListCommand, "powertoollist", "epowertoollist", "ptlist", "eptlist");
@@ -202,53 +202,92 @@ public final class PlayerUtilityCommands {
 
     private LiteralArgumentBuilder<CommandSourceStack> ptimeCommand(String name) {
         return Commands.literal(name)
-            .executes(context -> showPtime(context, context.getSource().getPlayerOrException()))
+            .executes(this::showPtimeDefault)
+            .then(personalTimeListBranch("get"))
+            .then(personalTimeListBranch("list"))
+            .then(personalTimeListBranch("show"))
+            .then(personalTimeListBranch("display"))
             .then(Commands.literal("reset")
                 .executes(context -> resetPtime(context, context.getSource().getPlayerOrException()))
                 .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
                     .requires(admin)
-                    .suggests(this::suggestPlayers)
-                    .executes(context -> resetPtime(context, resolveTargetOrNull(context)))))
+                    .suggests(this::suggestPlayersAndAll)
+                    .executes(context -> ptime(context, "reset", getString(context, TARGET_ARGUMENT)))))
             .then(Commands.argument(TIME_ARGUMENT, StringArgumentType.word())
                 .suggests(this::suggestTimesAndReset)
                 .executes(context -> ptime(context, getString(context, TIME_ARGUMENT), context.getSource().getPlayerOrException()))
                 .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
                     .requires(admin)
-                    .suggests(this::suggestPlayers)
-                    .executes(context -> ptime(context, getString(context, TIME_ARGUMENT), resolveTargetOrNull(context)))));
+                    .suggests(this::suggestPlayersAndAll)
+                    .executes(context -> ptime(context, getString(context, TIME_ARGUMENT), getString(context, TARGET_ARGUMENT)))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> pweatherCommand(String name) {
         return Commands.literal(name)
-            .executes(context -> showPweather(context, context.getSource().getPlayerOrException()))
+            .executes(this::showPweatherDefault)
+            .then(personalWeatherListBranch("get"))
+            .then(personalWeatherListBranch("list"))
+            .then(personalWeatherListBranch("show"))
+            .then(personalWeatherListBranch("display"))
             .then(Commands.literal("reset")
                 .executes(context -> resetPweather(context, context.getSource().getPlayerOrException()))
                 .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
                     .requires(admin)
-                    .suggests(this::suggestPlayers)
-                    .executes(context -> resetPweather(context, resolveTargetOrNull(context)))))
+                    .suggests(this::suggestPlayersAndAll)
+                    .executes(context -> pweather(context, "reset", getString(context, TARGET_ARGUMENT)))))
             .then(Commands.argument(WEATHER_ARGUMENT, StringArgumentType.word())
                 .suggests(this::suggestPersonalWeather)
                 .executes(context -> pweather(context, getString(context, WEATHER_ARGUMENT), context.getSource().getPlayerOrException()))
                 .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
                     .requires(admin)
-                    .suggests(this::suggestPlayers)
-                    .executes(context -> pweather(context, getString(context, WEATHER_ARGUMENT), resolveTargetOrNull(context)))));
+                    .suggests(this::suggestPlayersAndAll)
+                    .executes(context -> pweather(context, getString(context, WEATHER_ARGUMENT), getString(context, TARGET_ARGUMENT)))));
     }
 
-    private LiteralArgumentBuilder<CommandSourceStack> condenseCommand(String name) {
+    private LiteralArgumentBuilder<CommandSourceStack> condenseCommand(String name, CommandBuildContext registryAccess) {
         return Commands.literal(name)
-            .executes(this::condense);
+            .executes(context -> condense(context, null))
+            .then(Commands.argument(ITEM_ARGUMENT, ItemArgument.item(registryAccess))
+                .executes(context -> condense(context, ItemArgument.getItem(context, ITEM_ARGUMENT).createItemStack(1))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> unlimitedCommand(String name, CommandBuildContext registryAccess) {
         return Commands.literal(name)
             .requires(admin)
             .executes(this::toggleHeldUnlimited)
-            .then(Commands.literal("list").executes(this::listUnlimited))
-            .then(Commands.literal("clear").executes(this::clearUnlimited))
+            .then(Commands.literal("list")
+                .executes(context -> listUnlimited(context, context.getSource().getPlayerOrException()))
+                .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                    .suggests(this::suggestPlayers)
+                    .executes(context -> listUnlimited(context, resolveTargetOrNull(context)))))
+            .then(Commands.literal("clear")
+                .executes(context -> clearUnlimited(context, context.getSource().getPlayerOrException()))
+                .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                    .suggests(this::suggestPlayers)
+                    .executes(context -> clearUnlimited(context, resolveTargetOrNull(context)))))
             .then(Commands.argument(ITEM_ARGUMENT, ItemArgument.item(registryAccess))
-                .executes(context -> toggleUnlimited(context, ItemArgument.getItem(context, ITEM_ARGUMENT).createItemStack(1))));
+                .executes(context -> toggleUnlimited(context, context.getSource().getPlayerOrException(), ItemArgument.getItem(context, ITEM_ARGUMENT).createItemStack(1)))
+                .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                    .suggests(this::suggestPlayers)
+                    .executes(context -> toggleUnlimited(context, resolveTargetOrNull(context), ItemArgument.getItem(context, ITEM_ARGUMENT).createItemStack(1)))));
+    }
+
+    private LiteralArgumentBuilder<CommandSourceStack> personalTimeListBranch(String name) {
+        return Commands.literal(name)
+            .executes(this::showPtimeDefault)
+            .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                .requires(admin)
+                .suggests(this::suggestPlayersAndAll)
+                .executes(context -> showPtime(context, getString(context, TARGET_ARGUMENT))));
+    }
+
+    private LiteralArgumentBuilder<CommandSourceStack> personalWeatherListBranch(String name) {
+        return Commands.literal(name)
+            .executes(this::showPweatherDefault)
+            .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                .requires(admin)
+                .suggests(this::suggestPlayersAndAll)
+                .executes(context -> showPweather(context, getString(context, TARGET_ARGUMENT))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> powerToolCommand(String name) {
@@ -360,6 +399,14 @@ public final class PlayerUtilityCommands {
         return 1;
     }
 
+    private int showPtimeDefault(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayer();
+        if (player != null) {
+            return showPtime(context, player);
+        }
+        return showPtime(context, "*");
+    }
+
     private int showPtime(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         if (target == null) {
             return 0;
@@ -370,6 +417,18 @@ public final class PlayerUtilityCommands {
             preference.map(PlayerUtilityCommands::formatTime).orElse("server")
         ));
         return 1;
+    }
+
+    private int showPtime(CommandContext<CommandSourceStack> context, String selector) {
+        List<ServerPlayer> targets = resolveTargets(context, selector);
+        if (targets.isEmpty()) {
+            return 0;
+        }
+        if (targets.size() > 1) {
+            context.getSource().sendSystemMessage(Messages.header("Player times"));
+        }
+        targets.forEach(target -> showPtime(context, target));
+        return targets.size();
     }
 
     private int ptime(CommandContext<CommandSourceStack> context, String rawTime, ServerPlayer target) {
@@ -393,6 +452,15 @@ public final class PlayerUtilityCommands {
         return 1;
     }
 
+    private int ptime(CommandContext<CommandSourceStack> context, String rawTime, String selector) {
+        List<ServerPlayer> targets = resolveTargets(context, selector);
+        int changed = 0;
+        for (ServerPlayer target : targets) {
+            changed += ptime(context, rawTime, target) > 0 ? 1 : 0;
+        }
+        return changed;
+    }
+
     private int resetPtime(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         if (target == null) {
             return 0;
@@ -401,6 +469,14 @@ public final class PlayerUtilityCommands {
         target.connection.send(target.level().getServer().clockManager().createFullSyncPacket());
         context.getSource().sendSystemMessage(Messages.success("Player time reset: " + displayName(target)));
         return 1;
+    }
+
+    private int showPweatherDefault(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayer();
+        if (player != null) {
+            return showPweather(context, player);
+        }
+        return showPweather(context, "*");
     }
 
     private int showPweather(CommandContext<CommandSourceStack> context, ServerPlayer target) {
@@ -414,6 +490,18 @@ public final class PlayerUtilityCommands {
         return 1;
     }
 
+    private int showPweather(CommandContext<CommandSourceStack> context, String selector) {
+        List<ServerPlayer> targets = resolveTargets(context, selector);
+        if (targets.isEmpty()) {
+            return 0;
+        }
+        if (targets.size() > 1) {
+            context.getSource().sendSystemMessage(Messages.header("Player weather"));
+        }
+        targets.forEach(target -> showPweather(context, target));
+        return targets.size();
+    }
+
     private int pweather(CommandContext<CommandSourceStack> context, String rawWeather, ServerPlayer target) {
         if (target == null) {
             return 0;
@@ -422,15 +510,24 @@ public final class PlayerUtilityCommands {
         if (isReset(weather)) {
             return resetPweather(context, target);
         }
-        if (!weather.equals("sun") && !weather.equals("clear") && !weather.equals("storm") && !weather.equals("rain")) {
+        if (!weather.equals("sun") && !weather.equals("clear") && !weather.equals("storm") && !weather.equals("rain") && !weather.equals("thunder")) {
             context.getSource().sendSystemMessage(Messages.error("Invalid player weather: " + rawWeather));
             return 0;
         }
-        String stored = weather.equals("storm") || weather.equals("rain") ? "storm" : "sun";
+        String stored = weather.equals("storm") || weather.equals("rain") || weather.equals("thunder") ? "storm" : "sun";
         sendPersonalWeather(target, stored);
         preferences.setPersonalWeather(target.getUUID(), stored);
         context.getSource().sendSystemMessage(Messages.success("Player weather set: " + displayName(target) + " -> " + stored));
         return 1;
+    }
+
+    private int pweather(CommandContext<CommandSourceStack> context, String rawWeather, String selector) {
+        List<ServerPlayer> targets = resolveTargets(context, selector);
+        int changed = 0;
+        for (ServerPlayer target : targets) {
+            changed += pweather(context, rawWeather, target) > 0 ? 1 : 0;
+        }
+        return changed;
     }
 
     private int resetPweather(CommandContext<CommandSourceStack> context, ServerPlayer target) {
@@ -443,14 +540,18 @@ public final class PlayerUtilityCommands {
         return 1;
     }
 
-    private int condense(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+    private int condense(CommandContext<CommandSourceStack> context, ItemStack requestedItem) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         int converted = 0;
         for (CondenseRule rule : CONDENSE_RULES) {
+            if (requestedItem != null && requestedItem.getItem() != rule.source()) {
+                continue;
+            }
             converted += applyCondenseRule(player, rule);
         }
         if (converted == 0) {
-            context.getSource().sendSystemMessage(Messages.error("No condensable item stacks found."));
+            String suffix = requestedItem == null ? "" : " for " + itemId(requestedItem);
+            context.getSource().sendSystemMessage(Messages.error("No condensable item stacks found" + suffix + "."));
             return 0;
         }
         player.getInventory().setChanged();
@@ -466,29 +567,35 @@ public final class PlayerUtilityCommands {
             context.getSource().sendSystemMessage(Messages.error("Hold an item to toggle unlimited mode."));
             return 0;
         }
-        return toggleUnlimited(context, held);
+        return toggleUnlimited(context, player, held);
     }
 
-    private int toggleUnlimited(CommandContext<CommandSourceStack> context, ItemStack stack) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
+    private int toggleUnlimited(CommandContext<CommandSourceStack> context, ServerPlayer player, ItemStack stack) {
+        if (player == null) {
+            return 0;
+        }
         String itemId = itemId(stack);
         boolean enabled = unlimited.toggle(player.getUUID(), itemId);
-        context.getSource().sendSystemMessage(Messages.success((enabled ? "Unlimited enabled: " : "Unlimited disabled: ") + itemId));
+        context.getSource().sendSystemMessage(Messages.success((enabled ? "Unlimited enabled: " : "Unlimited disabled: ") + itemId + " for " + displayName(player)));
         refillUnlimitedItems(List.of(player));
         return 1;
     }
 
-    private int listUnlimited(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
+    private int listUnlimited(CommandContext<CommandSourceStack> context, ServerPlayer player) {
+        if (player == null) {
+            return 0;
+        }
         Set<String> items = unlimited.items(player.getUUID());
-        context.getSource().sendSystemMessage(Messages.line("Unlimited items", items.isEmpty() ? "none" : String.join(", ", items)));
+        context.getSource().sendSystemMessage(Messages.line("Unlimited items: " + displayName(player), items.isEmpty() ? "none" : String.join(", ", items)));
         return items.size();
     }
 
-    private int clearUnlimited(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
+    private int clearUnlimited(CommandContext<CommandSourceStack> context, ServerPlayer player) {
+        if (player == null) {
+            return 0;
+        }
         unlimited.clear(player.getUUID());
-        context.getSource().sendSystemMessage(Messages.success("Unlimited items cleared."));
+        context.getSource().sendSystemMessage(Messages.success("Unlimited items cleared: " + displayName(player)));
         return 1;
     }
 
@@ -818,11 +925,11 @@ public final class PlayerUtilityCommands {
     }
 
     private CompletableFuture<Suggestions> suggestTimesAndReset(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
-        return SharedSuggestionProvider.suggest(List.of("day", "night", "noon", "midnight", "sunrise", "sunset", "reset"), builder);
+        return SharedSuggestionProvider.suggest(List.of("get", "list", "reset", "sunrise", "day", "morning", "noon", "afternoon", "sunset", "night", "midnight", "17:30", "4pm", "4000ticks"), builder);
     }
 
     private CompletableFuture<Suggestions> suggestPersonalWeather(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
-        return SharedSuggestionProvider.suggest(List.of("sun", "storm", "rain", "clear", "reset"), builder);
+        return SharedSuggestionProvider.suggest(List.of("get", "list", "sun", "storm", "thunder", "rain", "clear", "reset"), builder);
     }
 
     private CompletableFuture<Suggestions> suggestToggleStatesAndPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
@@ -833,6 +940,12 @@ public final class PlayerUtilityCommands {
 
     private CompletableFuture<Suggestions> suggestCustomText(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         return SharedSuggestionProvider.suggest(customTextNames(), builder);
+    }
+
+    private CompletableFuture<Suggestions> suggestPlayersAndAll(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        Set<String> suggestions = new LinkedHashSet<>(List.of("*", "**"));
+        suggestions.addAll(playerSuggestions(context.getSource().getServer()));
+        return SharedSuggestionProvider.suggest(suggestions, builder);
     }
 
     private List<String> customTextNames() {
@@ -855,6 +968,19 @@ public final class PlayerUtilityCommands {
 
     private ServerPlayer resolveTargetOrNull(CommandContext<CommandSourceStack> context) {
         return resolveTarget(context.getSource().getServer(), getString(context, TARGET_ARGUMENT));
+    }
+
+    private List<ServerPlayer> resolveTargets(CommandContext<CommandSourceStack> context, String rawSelector) {
+        String selector = stripWrappingQuotes(rawSelector).trim();
+        if (selector.equals("*") || selector.equals("**")) {
+            return context.getSource().getServer().getPlayerList().getPlayers();
+        }
+        ServerPlayer target = resolveTarget(context.getSource().getServer(), selector);
+        if (target == null) {
+            context.getSource().sendSystemMessage(Messages.error("Player not found: " + rawSelector));
+            return List.of();
+        }
+        return List.of(target);
     }
 
     private static ServerPlayer resolveTarget(MinecraftServer server, String rawTarget) {
@@ -906,6 +1032,15 @@ public final class PlayerUtilityCommands {
             }
             if (value.matches("^[0-9]+$")) {
                 return Long.parseLong(value) % 24000L;
+            }
+            if (value.matches("^[0-9]{1,2}(am|pm)$")) {
+                int hour = Integer.parseInt(value.substring(0, value.length() - 2));
+                if (value.endsWith("pm") && hour < 12) {
+                    hour += 12;
+                } else if (value.endsWith("am") && hour == 12) {
+                    hour = 0;
+                }
+                return hoursMinutesToTicks(hour, 0);
             }
             if (value.matches("^[0-9]{2}:?[0-9]{2}$")) {
                 String digits = value.replace(":", "");

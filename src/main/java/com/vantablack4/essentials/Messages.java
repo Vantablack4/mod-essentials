@@ -1,9 +1,13 @@
 package com.vantablack4.essentials;
 
+import java.util.regex.Pattern;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 
 public final class Messages {
+    private static final Pattern MESSAGE_TAG = Pattern.compile("<[^>]+>");
+
     private Messages() {
     }
 
@@ -23,6 +27,10 @@ public final class Messages {
         return Component.literal(value).withStyle(ChatFormatting.GREEN);
     }
 
+    public static Component translated(String value) {
+        return Component.literal(stripFormatTags(value));
+    }
+
     public static Component error(String value) {
         return Component.literal("HATA: ")
             .withStyle(ChatFormatting.RED)
@@ -33,5 +41,9 @@ public final class Messages {
         return Component.literal("KULLANIM: ")
             .withStyle(ChatFormatting.YELLOW)
             .append(Component.literal(value).withStyle(ChatFormatting.WHITE));
+    }
+
+    public static String stripFormatTags(String value) {
+        return MESSAGE_TAG.matcher(value).replaceAll("");
     }
 }

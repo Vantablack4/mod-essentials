@@ -30,6 +30,7 @@ final class MailStore {
     static final int MAX_MESSAGE_LENGTH = 1000;
     private static final String NEXT_ID = "next-id";
     private static final String MAIL_PREFIX = "mail.";
+    private static final long NO_EXPIRY = 0L;
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z", Locale.ROOT)
         .withZone(ZoneId.systemDefault());
 
@@ -42,27 +43,35 @@ final class MailStore {
     }
 
     synchronized MailEntry send(MailRecipient recipient, MailSender sender, String message) {
+        return send(recipient, sender, message, NO_EXPIRY);
+    }
+
+    synchronized MailEntry send(MailRecipient recipient, MailSender sender, String message, long expireEpochMillis) {
         long id = nextId();
         String prefix = prefix(id);
         long now = System.currentTimeMillis();
+        long normalizedExpire = Math.max(NO_EXPIRY, expireEpochMillis);
         properties.setProperty(prefix + "recipient", recipient.key());
         properties.setProperty(prefix + "recipientName", recipient.displayName());
         properties.setProperty(prefix + "sender", sender.displayName());
         properties.setProperty(prefix + "senderKey", sender.key());
         properties.setProperty(prefix + "created", Long.toString(now));
+        if (normalizedExpire > NO_EXPIRY) {
+            properties.setProperty(prefix + "expire", Long.toString(normalizedExpire));
+        }
         properties.setProperty(prefix + "read", "false");
         properties.setProperty(prefix + "message", message);
         properties.setProperty(NEXT_ID, Long.toString(id + 1));
         save();
-        return new MailEntry(id, recipient.key(), recipient.displayName(), sender.key(), sender.displayName(), now, false, message);
+        return new MailEntry(id, recipient.key(), recipient.displayName(), sender.key(), sender.displayName(), now, normalizedExpire, false, message);
     }
 
     synchronized List<MailEntry> listFor(ServerPlayer player) {
-        Set<String> keys = recipientKeys(player);
-        return allEntries().stream()
-            .filter(entry -> keys.contains(entry.recipientKey()))
-            .sorted(Comparator.comparingLong(MailEntry::createdEpochMillis).thenComparingLong(MailEntry::id))
-            .toList();
+        return listForKeys(recipientKeys(player));
+    }
+
+    synchronized List<MailEntry> listFor(MailRecipient recipient) {
+        return listForKeys(recipientKeys(recipient));
     }
 
     synchronized List<MailEntry> readFor(ServerPlayer player) {
@@ -95,8 +104,27 @@ final class MailStore {
         return entries.size();
     }
 
+    synchronized int clear(MailRecipient recipient) {
+        List<MailEntry> entries = listFor(recipient);
+        for (MailEntry entry : entries) {
+            remove(entry.id());
+        }
+        if (!entries.isEmpty()) {
+            save();
+        }
+        return entries.size();
+    }
+
     synchronized Optional<MailEntry> delete(ServerPlayer player, int oneBasedIndex) {
-        List<MailEntry> entries = listFor(player);
+        return deleteForKeys(recipientKeys(player), oneBasedIndex);
+    }
+
+    synchronized Optional<MailEntry> delete(MailRecipient recipient, int oneBasedIndex) {
+        return deleteForKeys(recipientKeys(recipient), oneBasedIndex);
+    }
+
+    private Optional<MailEntry> deleteForKeys(Set<String> keys, int oneBasedIndex) {
+        List<MailEntry> entries = listForKeys(keys);
         if (oneBasedIndex < 1 || oneBasedIndex > entries.size()) {
             return Optional.empty();
         }
@@ -162,6 +190,26 @@ final class MailStore {
             .toList();
     }
 
+    private List<MailEntry> listForKeys(Set<String> keys) {
+        List<MailEntry> entries = allEntries();
+        long now = System.currentTimeMillis();
+        List<Long> expiredIds = entries.stream()
+            .filter(entry -> entry.expired(now))
+            .map(MailEntry::id)
+            .toList();
+        for (long id : expiredIds) {
+            remove(id);
+        }
+        if (!expiredIds.isEmpty()) {
+            save();
+        }
+        return entries.stream()
+            .filter(entry -> !entry.expired(now))
+            .filter(entry -> keys.contains(entry.recipientKey()))
+            .sorted(Comparator.comparingLong(MailEntry::createdEpochMillis).reversed().thenComparing(Comparator.comparingLong(MailEntry::id).reversed()))
+            .toList();
+    }
+
     private Optional<MailEntry> readEntry(long id) {
         String prefix = prefix(id);
         String recipientKey = properties.getProperty(prefix + "recipient");
@@ -170,11 +218,12 @@ final class MailStore {
         String sender = properties.getProperty(prefix + "sender", senderKey);
         String message = properties.getProperty(prefix + "message");
         Optional<Long> created = parseLong(properties.getProperty(prefix + "created", ""));
+        long expire = parseLong(properties.getProperty(prefix + "expire", Long.toString(NO_EXPIRY))).orElse(NO_EXPIRY);
         if (recipientKey == null || recipientKey.isBlank() || message == null || created.isEmpty()) {
             return Optional.empty();
         }
         boolean read = Boolean.parseBoolean(properties.getProperty(prefix + "read", "false"));
-        return Optional.of(new MailEntry(id, recipientKey, recipientName, senderKey, sender, created.get(), read, message));
+        return Optional.of(new MailEntry(id, recipientKey, recipientName, senderKey, sender, created.get(), Math.max(NO_EXPIRY, expire), read, message));
     }
 
     private long nextId() {
@@ -188,6 +237,7 @@ final class MailStore {
         properties.remove(prefix + "sender");
         properties.remove(prefix + "senderKey");
         properties.remove(prefix + "created");
+        properties.remove(prefix + "expire");
         properties.remove(prefix + "read");
         properties.remove(prefix + "message");
     }
@@ -196,6 +246,15 @@ final class MailStore {
         Set<String> keys = new LinkedHashSet<>();
         keys.add(uuidKey(player.getUUID()));
         keys.add(nameKey(player.getScoreboardName()));
+        return keys;
+    }
+
+    private static Set<String> recipientKeys(MailRecipient recipient) {
+        Set<String> keys = new LinkedHashSet<>();
+        keys.add(recipient.key());
+        if (recipient.displayName() != null && !recipient.displayName().isBlank()) {
+            keys.add(nameKey(recipient.displayName()));
+        }
         return keys;
     }
 
@@ -262,8 +321,16 @@ final class MailStore {
         String senderKey,
         String senderName,
         long createdEpochMillis,
+        long expireEpochMillis,
         boolean read,
         String message
     ) {
+        boolean timed() {
+            return expireEpochMillis > NO_EXPIRY;
+        }
+
+        boolean expired(long nowEpochMillis) {
+            return timed() && expireEpochMillis <= nowEpochMillis;
+        }
     }
 }

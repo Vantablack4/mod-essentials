@@ -4,14 +4,19 @@ import static com.mojang.brigadier.arguments.IntegerArgumentType.getInteger;
 import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 
 import java.nio.file.Path;
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -24,6 +29,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.vantablack4.essentials.Messages;
 import com.vantablack4.essentials.PermissionChecks;
 import com.vantablack4.essentials.VantablackEssentialsMod;
+import com.vantablack4.essentials.i18n.EssentialsXMessages;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.ChatFormatting;
@@ -41,9 +47,15 @@ public final class SocialCommands {
     private static final String MESSAGE_ARGUMENT = "message";
     private static final String INDEX_ARGUMENT = "index";
     private static final String PAGE_ARGUMENT = "page";
+    private static final String EXPIRY_ARGUMENT = "expiry";
     private static final String NICKNAME_ARGUMENT = "nickname";
     private static final int MAIL_PAGE_SIZE = 8;
     private static final int MAX_NICKNAME_LENGTH = 32;
+    private static final long NO_MAIL_EXPIRY = 0L;
+    private static final List<String> COMMON_DATE_DIFFS = List.of("1m", "15m", "1h", "3h", "12h", "1d", "1w", "1mo", "1y");
+    private static final Pattern MESSAGE_TAG = Pattern.compile("<[^>]+>");
+    private static final Pattern DURATION_TOKEN = Pattern.compile("(\\d+)(mo|[smhdwy])", Pattern.CASE_INSENSITIVE);
+    private static final EssentialsXMessages UPSTREAM_MESSAGES = EssentialsXMessages.loadDefault();
 
     private final PermissionChecks permissions;
     private final SocialStateService state;
@@ -61,7 +73,7 @@ public final class SocialCommands {
             state.nickname(player.getUUID()).ifPresent(nickname -> applyNickname(player, nickname));
             long unread = mailStore.unreadCount(player);
             if (unread > 0) {
-                player.sendSystemMessage(Messages.success("You have " + unread + " mail message(s). Type /mail read to view your mail."));
+                player.sendSystemMessage(tl("youHaveNewMail", "You have {0} messages! Type /mail read to view your mail.", unread));
             }
         });
     }
@@ -183,20 +195,43 @@ public final class SocialCommands {
                     .suggests(this::suggestPlayers)
                     .then(Commands.argument(MESSAGE_ARGUMENT, StringArgumentType.greedyString())
                         .executes(this::mailSend))))
+            .then(Commands.literal("sendtemp")
+                .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                    .suggests(this::suggestPlayers)
+                    .then(Commands.argument(EXPIRY_ARGUMENT, StringArgumentType.string())
+                        .suggests(this::suggestDateDiffs)
+                        .then(Commands.argument(MESSAGE_ARGUMENT, StringArgumentType.greedyString())
+                            .executes(this::mailSendTemp)))))
             .then(Commands.literal("sendall")
                 .requires(permissions::admin)
                 .then(Commands.argument(MESSAGE_ARGUMENT, StringArgumentType.greedyString())
                     .executes(this::mailSendAll)))
+            .then(Commands.literal("sendtempall")
+                .requires(permissions::admin)
+                .then(Commands.argument(EXPIRY_ARGUMENT, StringArgumentType.string())
+                    .suggests(this::suggestDateDiffs)
+                    .then(Commands.argument(MESSAGE_ARGUMENT, StringArgumentType.greedyString())
+                        .executes(this::mailSendTempAll))))
             .then(Commands.literal("clear")
                 .executes(this::mailClear)
                 .then(Commands.argument(INDEX_ARGUMENT, IntegerArgumentType.integer(1))
-                    .executes(this::mailDelete)))
+                    .executes(this::mailDelete))
+                .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                    .requires(permissions::admin)
+                    .suggests(this::suggestPlayers)
+                    .executes(this::mailClearOther)
+                    .then(Commands.argument(INDEX_ARGUMENT, IntegerArgumentType.integer(1))
+                        .executes(this::mailDeleteOther))))
             .then(Commands.literal("delete")
                 .then(Commands.argument(INDEX_ARGUMENT, IntegerArgumentType.integer(1))
                     .executes(this::mailDelete)))
             .then(Commands.literal("clearall")
                 .requires(permissions::admin)
-                .executes(this::mailClearAll));
+                .executes(this::mailClearAll))
+            .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+                .suggests(this::suggestPlayers)
+                .then(Commands.argument(MESSAGE_ARGUMENT, StringArgumentType.greedyString())
+                    .executes(this::mailConsoleSend)));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> nickCommand(String name) {
@@ -232,8 +267,10 @@ public final class SocialCommands {
 
         String senderName = sourceDisplayName(context.getSource());
         String targetName = SocialPlayerLookup.displayName(target);
-        Component toSender = privateMessageComponent("me", targetName, message);
-        Component toTarget = privateMessageComponent(senderName, "me", message);
+        String meSender = tlString("meSender", "me");
+        String meRecipient = tlString("meRecipient", "me");
+        Component toSender = privateMessageComponent(meSender, targetName, message);
+        Component toTarget = privateMessageComponent(senderName, meRecipient, message);
         context.getSource().sendSystemMessage(toSender);
         target.sendSystemMessage(toTarget);
 
@@ -250,7 +287,7 @@ public final class SocialCommands {
         ServerPlayer sender = context.getSource().getPlayerOrException();
         Optional<UUID> replyTarget = state.replyTarget(sender.getUUID());
         if (replyTarget.isEmpty()) {
-            sender.sendSystemMessage(Messages.error("You have nobody to whom you can reply."));
+            sender.sendSystemMessage(tl("foreverAlone", "You have nobody to whom you can reply."));
             return 0;
         }
         ServerPlayer target = context.getSource().getServer().getPlayerList().getPlayer(replyTarget.get());
@@ -267,7 +304,7 @@ public final class SocialCommands {
             return false;
         }
         if (state.messagesDisabled(target.getUUID()) && !permissions.admin(source)) {
-            source.sendSystemMessage(Messages.error(SocialPlayerLookup.displayName(target) + " has messages disabled."));
+            source.sendSystemMessage(tl("msgIgnore", "{0} has messages disabled.", SocialPlayerLookup.displayName(target)));
             return false;
         }
         return true;
@@ -277,14 +314,14 @@ public final class SocialCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Set<UUID> ignored = state.ignoredPlayers(player.getUUID());
         if (ignored.isEmpty()) {
-            player.sendSystemMessage(Messages.line("Ignored", "none"));
+            player.sendSystemMessage(tl("noIgnored", "You are not ignoring anyone."));
             return 1;
         }
         List<String> names = ignored.stream()
             .map(uuid -> displayKnownPlayer(context.getSource().getServer(), uuid))
             .sorted(String.CASE_INSENSITIVE_ORDER)
             .toList();
-        player.sendSystemMessage(Messages.line("Ignored", String.join(", ", names)));
+        player.sendSystemMessage(tl("ignoredList", "Ignored: {0}", String.join(", ", names)));
         return names.size();
     }
 
@@ -295,11 +332,13 @@ public final class SocialCommands {
             return 0;
         }
         if (player.getUUID().equals(target.getUUID())) {
-            player.sendSystemMessage(Messages.error("Ignoring yourself will not solve anything."));
+            player.sendSystemMessage(tl("ignoreYourself", "Ignoring yourself won't solve your problems."));
             return 0;
         }
         boolean ignored = state.toggleIgnored(player.getUUID(), target.getUUID());
-        player.sendSystemMessage(Messages.success((ignored ? "Now ignoring " : "No longer ignoring ") + SocialPlayerLookup.displayName(target) + "."));
+        player.sendSystemMessage(ignored
+            ? tl("ignorePlayer", "You ignore player {0} from now on.", SocialPlayerLookup.displayName(target))
+            : tl("unignorePlayer", "You are not ignoring player {0} anymore.", SocialPlayerLookup.displayName(target)));
         return 1;
     }
 
@@ -318,29 +357,29 @@ public final class SocialCommands {
 
     private int messageToggle(CommandContext<CommandSourceStack> context, ServerPlayer target, Boolean disabled) {
         boolean next = state.setMessagesDisabled(target.getUUID(), disabled);
-        target.sendSystemMessage(Messages.success("Receiving private messages " + (next ? "disabled" : "enabled") + "."));
-        echoIfOther(context, target, "Receiving private messages " + (next ? "disabled" : "enabled") + " for " + SocialPlayerLookup.displayName(target) + ".");
+        target.sendSystemMessage(tl(next ? "msgDisabled" : "msgEnabled", "Receiving messages " + (next ? "disabled" : "enabled") + "."));
+        echoIfOther(context, target, next ? "msgDisabledFor" : "msgEnabledFor", "Receiving messages " + (next ? "disabled" : "enabled") + " for {0}.", SocialPlayerLookup.displayName(target));
         return 1;
     }
 
     private int replyToggle(CommandContext<CommandSourceStack> context, ServerPlayer target, Boolean enabled) {
         boolean next = state.setReplyToLastRecipient(target.getUUID(), enabled);
-        target.sendSystemMessage(Messages.success("Replying to last message recipient " + (next ? "enabled" : "disabled") + "."));
-        echoIfOther(context, target, "Replying to last message recipient " + (next ? "enabled" : "disabled") + " for " + SocialPlayerLookup.displayName(target) + ".");
+        target.sendSystemMessage(tl(next ? "replyLastRecipientEnabled" : "replyLastRecipientDisabled", "Replying to last message recipient " + (next ? "enabled" : "disabled") + "."));
+        echoIfOther(context, target, next ? "replyLastRecipientEnabledFor" : "replyLastRecipientDisabledFor", "Replying to last message recipient " + (next ? "enabled" : "disabled") + " for {0}.", SocialPlayerLookup.displayName(target));
         return 1;
     }
 
     private int socialSpyToggle(CommandContext<CommandSourceStack> context, ServerPlayer target, Boolean enabled) {
         boolean next = state.setSocialSpy(target.getUUID(), enabled);
-        target.sendSystemMessage(Messages.success("SocialSpy for " + SocialPlayerLookup.displayName(target) + ": " + (next ? "enabled" : "disabled") + "."));
-        echoIfOther(context, target, "SocialSpy for " + SocialPlayerLookup.displayName(target) + ": " + (next ? "enabled" : "disabled") + ".");
+        target.sendSystemMessage(tl("socialSpy", "SocialSpy for {0}: {1}", SocialPlayerLookup.displayName(target), enableDisable(next)));
+        echoIfOther(context, target, "socialSpy", "SocialSpy for {0}: {1}", SocialPlayerLookup.displayName(target), enableDisable(next));
         return 1;
     }
 
     private int shoutToggle(CommandContext<CommandSourceStack> context, ServerPlayer target, Boolean enabled) {
         boolean next = state.setShout(target.getUUID(), enabled);
-        target.sendSystemMessage(Messages.success("Shout mode " + (next ? "enabled" : "disabled") + "."));
-        echoIfOther(context, target, "Shout mode " + (next ? "enabled" : "disabled") + " for " + SocialPlayerLookup.displayName(target) + ".");
+        target.sendSystemMessage(tl(next ? "shoutEnabled" : "shoutDisabled", "Shout mode " + (next ? "enabled" : "disabled") + "."));
+        echoIfOther(context, target, next ? "shoutEnabledFor" : "shoutDisabledFor", "Shout mode " + (next ? "enabled" : "disabled") + " for {0}.", SocialPlayerLookup.displayName(target));
         if (next) {
             target.sendSystemMessage(Messages.line("Scope", "mod-roleplay owns live chat formatting; this stores the EssentialsX shout preference for integrations."));
         }
@@ -350,10 +389,7 @@ public final class SocialCommands {
     private int helpOp(CommandContext<CommandSourceStack> context) {
         String message = getString(context, MESSAGE_ARGUMENT);
         String senderName = sourceDisplayName(context.getSource());
-        Component component = Component.literal("[HelpOp] ")
-            .withStyle(ChatFormatting.RED)
-            .append(Component.literal(senderName + ": ").withStyle(ChatFormatting.GOLD))
-            .append(Component.literal(message).withStyle(ChatFormatting.WHITE));
+        Component component = tl("helpOp", "[HelpOp] {0}: {1}", senderName, message);
         int recipients = 0;
         for (ServerPlayer player : context.getSource().getServer().getPlayerList().getPlayers()) {
             if (permissions.admin(player.createCommandSourceStack())) {
@@ -370,7 +406,7 @@ public final class SocialCommands {
         String message = getString(context, MESSAGE_ARGUMENT);
         ServerPlayer sender = context.getSource().getPlayer();
         String senderName = sourceDisplayName(context.getSource());
-        Component action = Component.literal("* " + senderName + " " + message).withStyle(ChatFormatting.LIGHT_PURPLE);
+        Component action = tl("action", "* {0} {1}", senderName, message).copy().withStyle(ChatFormatting.LIGHT_PURPLE);
         int recipients = 0;
         for (ServerPlayer player : context.getSource().getServer().getPlayerList().getPlayers()) {
             if (sender == null || !state.isIgnored(player.getUUID(), sender.getUUID())) {
@@ -398,7 +434,7 @@ public final class SocialCommands {
 
         if (state.isAfk(target.getUUID())) {
             state.clearAfk(target.getUUID());
-            broadcast(context.getSource().getServer(), Messages.success(SocialPlayerLookup.displayName(target) + " is no longer AFK."));
+            broadcast(context.getSource().getServer(), tl("userIsNotAway", "* {0} is no longer AFK.", SocialPlayerLookup.displayName(target)));
         } else {
             SocialStateService.AfkStatus status = state.setAfk(target.getUUID(), message);
             broadcast(context.getSource().getServer(), afkComponent(target, status));
@@ -410,7 +446,7 @@ public final class SocialCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         List<MailStore.MailEntry> mail = mailStore.readFor(player);
         if (mail.isEmpty()) {
-            player.sendSystemMessage(Messages.success("You do not have any mail."));
+            player.sendSystemMessage(tl("noMail", "You do not have any mail."));
             return 1;
         }
         int pages = Math.max(1, (int) Math.ceil(mail.size() / (double) MAIL_PAGE_SIZE));
@@ -422,36 +458,71 @@ public final class SocialCommands {
             MailStore.MailEntry entry = mail.get(index);
             player.sendSystemMessage(Component.literal((index + 1) + ". ")
                 .withStyle(entry.read() ? ChatFormatting.GRAY : ChatFormatting.GREEN)
-                .append(Component.literal("[" + MailStore.formatDate(entry.createdEpochMillis()) + "] ").withStyle(ChatFormatting.DARK_GRAY))
-                .append(Component.literal(entry.senderName() + ": ").withStyle(ChatFormatting.GOLD))
-                .append(Component.literal(entry.message()).withStyle(ChatFormatting.WHITE)));
+                .append(mailLine(entry)));
         }
-        player.sendSystemMessage(Messages.usage("/mail clear | /mail delete <number>"));
+        player.sendSystemMessage(tl("mailClear", "To clear your mail, type /mail clear."));
         return mail.size();
     }
 
     private int mailSend(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
-        String message = getString(context, MESSAGE_ARGUMENT);
-        if (message.length() > MailStore.MAX_MESSAGE_LENGTH) {
-            context.getSource().sendSystemMessage(Messages.error("Mail message too long. Keep it below " + MailStore.MAX_MESSAGE_LENGTH + " characters."));
+        return mailSendTo(context, getString(context, TARGET_ARGUMENT), getString(context, MESSAGE_ARGUMENT), NO_MAIL_EXPIRY);
+    }
+
+    private int mailSendTemp(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        OptionalLong expireEpochMillis = parseExpireEpochMillis(context, getString(context, EXPIRY_ARGUMENT));
+        if (expireEpochMillis.isEmpty()) {
             return 0;
         }
-        MailStore.MailRecipient recipient = mailStore.recipientFor(context.getSource().getServer(), getString(context, TARGET_ARGUMENT));
+        return mailSendTo(context, getString(context, TARGET_ARGUMENT), getString(context, MESSAGE_ARGUMENT), expireEpochMillis.getAsLong());
+    }
+
+    private int mailConsoleSend(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        if (context.getSource().getPlayer() != null) {
+            context.getSource().sendSystemMessage(Messages.usage("/mail send <player> <message>"));
+            return 0;
+        }
+        return mailSendTo(context, getString(context, TARGET_ARGUMENT), getString(context, MESSAGE_ARGUMENT), NO_MAIL_EXPIRY);
+    }
+
+    private int mailSendTo(CommandContext<CommandSourceStack> context, String targetName, String message, long expireEpochMillis) throws CommandSyntaxException {
+        if (message.length() > MailStore.MAX_MESSAGE_LENGTH) {
+            context.getSource().sendSystemMessage(tl("mailTooLong", "Mail message too long. Try to keep it below 1000 characters."));
+            return 0;
+        }
+        MailStore.MailRecipient recipient = mailStore.recipientFor(context.getSource().getServer(), targetName);
         MailStore.MailSender sender = context.getSource().getPlayer() == null
             ? mailStore.consoleSender()
             : mailStore.senderFor(context.getSource().getPlayerOrException());
-        MailStore.MailEntry entry = mailStore.send(recipient, sender, message);
-        context.getSource().sendSystemMessage(Messages.success("Mail sent to " + recipient.displayName() + "."));
+        MailStore.MailEntry entry = mailStore.send(recipient, sender, message, expireEpochMillis);
+        if (entry.timed()) {
+            context.getSource().sendSystemMessage(tl("mailSentToExpire", "{0} has been sent the following mail which will expire in {1}:", recipient.displayName(), formatDateDiff(expireEpochMillis)));
+            context.getSource().sendSystemMessage(Component.literal(message));
+        } else {
+            context.getSource().sendSystemMessage(tl("mailSentTo", "{0} has been sent the following mail:", recipient.displayName()));
+            context.getSource().sendSystemMessage(Component.literal(message));
+        }
         SocialPlayerLookup.findOnline(context.getSource().getServer(), recipient.displayName())
-            .ifPresent(player -> player.sendSystemMessage(Messages.success("You have new mail from " + sender.displayName() + ". Type /mail read to view it.")));
+            .ifPresent(player -> player.sendSystemMessage(tl("youHaveNewMail", "You have {0} messages! Type /mail read to view your mail.", mailStore.unreadCount(player))));
         socialSpyMail(context.getSource().getServer(), context.getSource().getPlayer(), sender.displayName(), recipient.displayName(), entry.message());
         return 1;
     }
 
     private int mailSendAll(CommandContext<CommandSourceStack> context) {
+        return mailSendAll(context, NO_MAIL_EXPIRY);
+    }
+
+    private int mailSendTempAll(CommandContext<CommandSourceStack> context) {
+        OptionalLong expireEpochMillis = parseExpireEpochMillis(context, getString(context, EXPIRY_ARGUMENT));
+        if (expireEpochMillis.isEmpty()) {
+            return 0;
+        }
+        return mailSendAll(context, expireEpochMillis.getAsLong());
+    }
+
+    private int mailSendAll(CommandContext<CommandSourceStack> context, long expireEpochMillis) {
         String message = getString(context, MESSAGE_ARGUMENT);
         if (message.length() > MailStore.MAX_MESSAGE_LENGTH) {
-            context.getSource().sendSystemMessage(Messages.error("Mail message too long. Keep it below " + MailStore.MAX_MESSAGE_LENGTH + " characters."));
+            context.getSource().sendSystemMessage(tl("mailTooLong", "Mail message too long. Try to keep it below 1000 characters."));
             return 0;
         }
         MailStore.MailSender sender = context.getSource().getPlayer() == null
@@ -459,18 +530,19 @@ public final class SocialCommands {
             : mailStore.senderFor(context.getSource().getPlayer());
         int count = 0;
         for (ServerPlayer player : context.getSource().getServer().getPlayerList().getPlayers()) {
-            mailStore.send(new MailStore.MailRecipient("uuid:" + player.getUUID(), SocialPlayerLookup.displayName(player)), sender, message);
-            player.sendSystemMessage(Messages.success("You have new mail from " + sender.displayName() + ". Type /mail read to view it."));
+            mailStore.send(new MailStore.MailRecipient("uuid:" + player.getUUID(), SocialPlayerLookup.displayName(player)), sender, message, expireEpochMillis);
+            player.sendSystemMessage(tl("youHaveNewMail", "You have {0} messages! Type /mail read to view your mail.", mailStore.unreadCount(player)));
             count++;
         }
-        context.getSource().sendSystemMessage(Messages.success("Mail sent to " + count + " online player(s)."));
+        context.getSource().sendSystemMessage(tl("mailSent", "Mail sent!"));
+        context.getSource().sendSystemMessage(Messages.line("Recipients", Integer.toString(count)));
         return count;
     }
 
     private int mailClear(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         int removed = mailStore.clear(player);
-        player.sendSystemMessage(Messages.success(removed == 0 ? "You do not have any mail." : "Mail cleared."));
+        player.sendSystemMessage(removed == 0 ? tl("noMail", "You do not have any mail.") : tl("mailCleared", "Mail cleared!"));
         return Math.max(1, removed);
     }
 
@@ -479,16 +551,42 @@ public final class SocialCommands {
         int index = getInteger(context, INDEX_ARGUMENT);
         Optional<MailStore.MailEntry> removed = mailStore.delete(player, index);
         if (removed.isEmpty()) {
-            player.sendSystemMessage(Messages.error("You must specify a mail number in your mailbox."));
+            int mailboxSize = mailStore.listFor(player).size();
+            player.sendSystemMessage(tl("mailClearIndex", "You must specify a number between 1-{0}.", Math.max(1, mailboxSize)));
             return 0;
         }
-        player.sendSystemMessage(Messages.success("Mail deleted: " + index));
+        player.sendSystemMessage(tl("mailCleared", "Mail cleared!"));
+        return 1;
+    }
+
+    private int mailClearOther(CommandContext<CommandSourceStack> context) {
+        MailStore.MailRecipient recipient = mailStore.recipientFor(context.getSource().getServer(), getString(context, TARGET_ARGUMENT));
+        int removed = mailStore.clear(recipient);
+        context.getSource().sendSystemMessage(removed == 0
+            ? tl("noMailOther", "{0} does not have any mail.", recipient.displayName())
+            : tl("mailCleared", "Mail cleared!"));
+        return Math.max(1, removed);
+    }
+
+    private int mailDeleteOther(CommandContext<CommandSourceStack> context) {
+        MailStore.MailRecipient recipient = mailStore.recipientFor(context.getSource().getServer(), getString(context, TARGET_ARGUMENT));
+        int index = getInteger(context, INDEX_ARGUMENT);
+        Optional<MailStore.MailEntry> removed = mailStore.delete(recipient, index);
+        if (removed.isEmpty()) {
+            int mailboxSize = mailStore.listFor(recipient).size();
+            context.getSource().sendSystemMessage(mailboxSize == 0
+                ? tl("noMailOther", "{0} does not have any mail.", recipient.displayName())
+                : tl("mailClearIndex", "You must specify a number between 1-{0}.", mailboxSize));
+            return 0;
+        }
+        context.getSource().sendSystemMessage(tl("mailCleared", "Mail cleared!"));
         return 1;
     }
 
     private int mailClearAll(CommandContext<CommandSourceStack> context) {
         int removed = mailStore.clearAll();
-        context.getSource().sendSystemMessage(Messages.success("Mail cleared for all local mailboxes: " + removed + " message(s)."));
+        context.getSource().sendSystemMessage(tl("mailClearedAll", "Mail cleared for all players!"));
+        context.getSource().sendSystemMessage(Messages.line("Messages", Integer.toString(removed)));
         return Math.max(1, removed);
     }
 
@@ -501,22 +599,24 @@ public final class SocialCommands {
         if (nickname.equalsIgnoreCase("off")) {
             state.setNickname(target.getUUID(), null);
             clearNickname(target);
-            target.sendSystemMessage(Messages.success("You no longer have a nickname."));
-            echoIfOther(context, target, "Nickname removed for " + target.getScoreboardName() + ".");
+            target.sendSystemMessage(tl("nickNoMore", "You no longer have a nickname."));
+            echoIfOther(context, target, "nickChanged", "Nickname changed.");
             return 1;
         }
         if (!validNickname(nickname)) {
-            context.getSource().sendSystemMessage(Messages.error("Nicknames must be 1-" + MAX_NICKNAME_LENGTH + " printable characters and cannot use control codes."));
+            context.getSource().sendSystemMessage(nickname.length() > MAX_NICKNAME_LENGTH
+                ? tl("nickTooLong", "That nickname is too long.")
+                : tl("nickNamesAlpha", "Nicknames must be alphanumeric."));
             return 0;
         }
         if (nicknameInUse(context.getSource().getServer(), target, nickname)) {
-            context.getSource().sendSystemMessage(Messages.error("That nickname is already in use."));
+            context.getSource().sendSystemMessage(tl("nickInUse", "That name is already in use."));
             return 0;
         }
         state.setNickname(target.getUUID(), nickname);
         applyNickname(target, nickname);
-        target.sendSystemMessage(Messages.success("Your nickname is now " + nickname + "."));
-        echoIfOther(context, target, "Nickname changed for " + target.getScoreboardName() + " to " + nickname + ".");
+        target.sendSystemMessage(tl("nickSet", "Your nickname is now {0}.", nickname));
+        echoIfOther(context, target, "nickChanged", "Nickname changed.");
         if (other) {
             context.getSource().sendSystemMessage(Messages.line("Fabric limitation", "This updates the server-side entity display/custom name. Vanilla signed chat and tab-list names need a dedicated mixin/packet bridge for full Bukkit display-name parity."));
         }
@@ -548,6 +648,10 @@ public final class SocialCommands {
         return SharedSuggestionProvider.suggest(List.of("on", "off", "enable", "disable"), builder);
     }
 
+    private CompletableFuture<Suggestions> suggestDateDiffs(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(COMMON_DATE_DIFFS, builder);
+    }
+
     private CompletableFuture<Suggestions> suggestPlayersAndOff(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         Set<String> suggestions = new LinkedHashSet<>(List.of("off"));
         suggestions.addAll(SocialPlayerLookup.suggestions(context.getSource().getServer()));
@@ -555,10 +659,9 @@ public final class SocialCommands {
     }
 
     private void socialSpy(MinecraftServer server, ServerPlayer sender, ServerPlayer target, String senderName, String targetName, String message) {
-        Component spy = Component.literal("[SocialSpy] ")
+        Component spy = Component.literal(tlString("socialSpyPrefix", "[SS] "))
             .withStyle(ChatFormatting.DARK_GRAY)
-            .append(Component.literal(senderName + " -> " + targetName + ": ").withStyle(ChatFormatting.GRAY))
-            .append(Component.literal(message).withStyle(ChatFormatting.WHITE));
+            .append(tl("socialSpyMsgFormat", "[{0} -> {1}] {2}", senderName, targetName, message).copy().withStyle(ChatFormatting.GRAY));
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (state.socialSpy(player.getUUID())
                 && (sender == null || !player.getUUID().equals(sender.getUUID()))
@@ -569,10 +672,9 @@ public final class SocialCommands {
     }
 
     private void socialSpyMail(MinecraftServer server, ServerPlayer sender, String senderName, String targetName, String message) {
-        Component spy = Component.literal("[SocialSpy] ")
+        Component spy = Component.literal(tlString("socialSpyPrefix", "[SS] "))
             .withStyle(ChatFormatting.DARK_GRAY)
-            .append(Component.literal("mail " + senderName + " -> " + targetName + ": ").withStyle(ChatFormatting.GRAY))
-            .append(Component.literal(message).withStyle(ChatFormatting.WHITE));
+            .append(tl("socialSpyMsgFormat", "[{0} -> {1}] {2}", "mail " + senderName, targetName, message).copy().withStyle(ChatFormatting.GRAY));
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (state.socialSpy(player.getUUID()) && (sender == null || !player.getUUID().equals(sender.getUUID()))) {
                 player.sendSystemMessage(spy);
@@ -581,17 +683,17 @@ public final class SocialCommands {
     }
 
     private void sendAfkNotice(ServerPlayer sender, ServerPlayer target, SocialStateService.AfkStatus status) {
-        String text = status.message() == null
-            ? SocialPlayerLookup.displayName(target) + " is AFK."
-            : SocialPlayerLookup.displayName(target) + " is AFK: " + status.message();
-        sender.sendSystemMessage(Messages.success(text));
+        if (status.message() == null) {
+            sender.sendSystemMessage(tl("userAFK", "{0} is currently AFK and may not respond.", SocialPlayerLookup.displayName(target)));
+        } else {
+            sender.sendSystemMessage(tl("userAFKWithMessage", "{0} is currently AFK and may not respond: {1}", SocialPlayerLookup.displayName(target), status.message()));
+        }
     }
 
     private Component afkComponent(ServerPlayer player, SocialStateService.AfkStatus status) {
-        String text = status.message() == null
-            ? SocialPlayerLookup.displayName(player) + " is now AFK."
-            : SocialPlayerLookup.displayName(player) + " is now AFK: " + status.message();
-        return Messages.success(text);
+        return status.message() == null
+            ? tl("userIsAway", "* {0} is now AFK.", SocialPlayerLookup.displayName(player))
+            : tl("userIsAwayWithMessage", "* {0} is now AFK.", SocialPlayerLookup.displayName(player), status.message());
     }
 
     private void broadcast(MinecraftServer server, Component component) {
@@ -600,26 +702,123 @@ public final class SocialCommands {
         }
     }
 
-    private void echoIfOther(CommandContext<CommandSourceStack> context, ServerPlayer target, String message) {
+    private void echoIfOther(CommandContext<CommandSourceStack> context, ServerPlayer target, String key, String fallback, Object... arguments) {
         ServerPlayer sender = context.getSource().getPlayer();
         if (sender == null || !sender.getUUID().equals(target.getUUID())) {
-            context.getSource().sendSystemMessage(Messages.success(message));
+            context.getSource().sendSystemMessage(tl(key, fallback, arguments));
         }
     }
 
+    private Component mailLine(MailStore.MailEntry entry) {
+        String key = (entry.read() ? "mailFormatNewRead" : "mailFormatNew") + (entry.timed() ? "Timed" : "");
+        String fallback = entry.timed()
+            ? "[!] [{0}] [{1}] {2}"
+            : "[{0}] [{1}] {2}";
+        return tl(key, fallback, MailStore.formatDate(entry.createdEpochMillis()), entry.senderName(), entry.message());
+    }
+
     private static Component privateMessageComponent(String sender, String recipient, String message) {
-        return Component.literal("[")
-            .withStyle(ChatFormatting.GRAY)
-            .append(Component.literal(sender).withStyle(ChatFormatting.GOLD))
-            .append(Component.literal(" -> ").withStyle(ChatFormatting.GRAY))
-            .append(Component.literal(recipient).withStyle(ChatFormatting.GOLD))
-            .append(Component.literal("] ").withStyle(ChatFormatting.GRAY))
-            .append(Component.literal(message).withStyle(ChatFormatting.WHITE));
+        return tl("msgFormat", "[{0} -> {1}] {2}", sender, recipient, message);
     }
 
     private static String sourceDisplayName(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         return player == null ? "Console" : SocialPlayerLookup.displayName(player);
+    }
+
+    private OptionalLong parseExpireEpochMillis(CommandContext<CommandSourceStack> context, String rawExpiry) {
+        OptionalLong expireEpochMillis = parseDateDiff(rawExpiry);
+        if (expireEpochMillis.isEmpty()) {
+            context.getSource().sendSystemMessage(Messages.error("Invalid expiry time: " + rawExpiry + ". Use values like 15m, 1h, 1d, 1w, 1mo, or 1y."));
+        }
+        return expireEpochMillis;
+    }
+
+    private static OptionalLong parseDateDiff(String rawExpiry) {
+        String compact = rawExpiry == null ? "" : rawExpiry.trim().replace(" ", "");
+        if (compact.isBlank()) {
+            return OptionalLong.empty();
+        }
+
+        Calendar target = new GregorianCalendar();
+        Matcher matcher = DURATION_TOKEN.matcher(compact);
+        int position = 0;
+        boolean found = false;
+        while (matcher.find()) {
+            if (matcher.start() != position) {
+                return OptionalLong.empty();
+            }
+            int amount;
+            try {
+                amount = Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException exception) {
+                return OptionalLong.empty();
+            }
+            if (amount <= 0) {
+                return OptionalLong.empty();
+            }
+
+            switch (matcher.group(2).toLowerCase(Locale.ROOT)) {
+                case "y" -> target.add(Calendar.YEAR, amount);
+                case "mo" -> target.add(Calendar.MONTH, amount);
+                case "w" -> target.add(Calendar.WEEK_OF_YEAR, amount);
+                case "d" -> target.add(Calendar.DAY_OF_MONTH, amount);
+                case "h" -> target.add(Calendar.HOUR_OF_DAY, amount);
+                case "m" -> target.add(Calendar.MINUTE, amount);
+                case "s" -> target.add(Calendar.SECOND, amount);
+                default -> {
+                    return OptionalLong.empty();
+                }
+            }
+            position = matcher.end();
+            found = true;
+        }
+
+        if (!found || position != compact.length()) {
+            return OptionalLong.empty();
+        }
+
+        Calendar max = new GregorianCalendar();
+        max.add(Calendar.YEAR, 10);
+        if (target.after(max)) {
+            return OptionalLong.of(max.getTimeInMillis());
+        }
+        return OptionalLong.of(target.getTimeInMillis());
+    }
+
+    private static String formatDateDiff(long targetEpochMillis) {
+        long seconds = Math.max(1L, (targetEpochMillis - System.currentTimeMillis() + 999L) / 1000L);
+        long[] unitSeconds = {31_536_000L, 2_592_000L, 86_400L, 3_600L, 60L, 1L};
+        String[] singular = {"year", "month", "day", "hour", "minute", "second"};
+        String[] plural = {"years", "months", "days", "hours", "minutes", "seconds"};
+        StringBuilder result = new StringBuilder();
+        int accuracy = 0;
+        for (int i = 0; i < unitSeconds.length && accuracy < 3; i++) {
+            long count = seconds / unitSeconds[i];
+            if (count <= 0) {
+                continue;
+            }
+            seconds -= count * unitSeconds[i];
+            if (result.length() > 0) {
+                result.append(' ');
+            }
+            result.append(count).append(' ').append(count == 1 ? singular[i] : plural[i]);
+            accuracy++;
+        }
+        return result.length() == 0 ? "now" : result.toString();
+    }
+
+    private static String enableDisable(boolean enabled) {
+        return tlString(enabled ? "enabled" : "disabled", enabled ? "enabled" : "disabled");
+    }
+
+    private static Component tl(String key, String fallback, Object... arguments) {
+        return Component.literal(tlString(key, fallback, arguments));
+    }
+
+    private static String tlString(String key, String fallback, Object... arguments) {
+        String message = UPSTREAM_MESSAGES.messageOrDefault(Locale.ROOT, key, fallback, arguments);
+        return MESSAGE_TAG.matcher(message).replaceAll("");
     }
 
     private static Boolean parseToggle(String raw) {

@@ -179,6 +179,7 @@ public final class EssentialsItemCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> itemNameCommand(String name, Predicate<CommandSourceStack> admin) {
         return Commands.literal(name)
             .requires(admin)
+            .executes(EssentialsItemCommands::clearItemName)
             .then(Commands.literal("clear")
                 .executes(EssentialsItemCommands::clearItemName))
             .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.greedyString())
@@ -205,6 +206,11 @@ public final class EssentialsItemCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> bookCommand(String name, Predicate<CommandSourceStack> admin) {
         return Commands.literal(name)
             .requires(admin)
+            .executes(EssentialsItemCommands::toggleBookSignedState)
+            .then(Commands.literal("sign")
+                .executes(EssentialsItemCommands::signBook))
+            .then(Commands.literal("unsign")
+                .executes(EssentialsItemCommands::unsignBook))
             .then(Commands.literal("title")
                 .then(Commands.argument(TITLE_ARGUMENT, StringArgumentType.greedyString())
                     .executes(EssentialsItemCommands::bookTitle)))
@@ -555,6 +561,70 @@ public final class EssentialsItemCommands {
         ));
         player.containerMenu.broadcastChanges();
         context.getSource().sendSystemMessage(Messages.success("Kitap yazarı ayarlandı: " + author));
+        return 1;
+    }
+
+    private static int toggleBookSignedState(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ItemStack held = requireHeldStack(context, player);
+        if (held.isEmpty()) {
+            return 0;
+        }
+        if (held.getItem() == Items.WRITABLE_BOOK) {
+            return signBook(context);
+        }
+        if (held.getItem() == Items.WRITTEN_BOOK) {
+            return unsignBook(context);
+        }
+        context.getSource().sendSystemMessage(Messages.error("Elindeki eşya yazılabilir ya da imzalı kitap olmalı."));
+        return 0;
+    }
+
+    private static int signBook(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ItemStack held = requireHeldStack(context, player);
+        if (held.isEmpty()) {
+            return 0;
+        }
+        if (held.getItem() != Items.WRITABLE_BOOK) {
+            context.getSource().sendSystemMessage(Messages.error("Sign requires a writable book in hand."));
+            return 0;
+        }
+        ItemStack written = held.transmuteCopy(Items.WRITTEN_BOOK, held.getCount());
+        written.set(DataComponents.WRITTEN_BOOK_CONTENT, writtenBookContent(held, player));
+        written.remove(DataComponents.WRITABLE_BOOK_CONTENT);
+        player.getInventory().setSelectedItem(written);
+        player.getInventory().setChanged();
+        player.containerMenu.broadcastChanges();
+        context.getSource().sendSystemMessage(Messages.success("Book signed."));
+        return 1;
+    }
+
+    private static int unsignBook(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ItemStack held = requireHeldStack(context, player);
+        if (held.isEmpty()) {
+            return 0;
+        }
+        if (held.getItem() != Items.WRITTEN_BOOK) {
+            context.getSource().sendSystemMessage(Messages.error("Unsign requires a written book in hand."));
+            return 0;
+        }
+        WrittenBookContent written = held.get(DataComponents.WRITTEN_BOOK_CONTENT);
+        if (written == null) {
+            context.getSource().sendSystemMessage(Messages.error("Written book metadata is missing."));
+            return 0;
+        }
+        List<Filterable<String>> pages = written.pages().stream()
+            .map(page -> page.map(Component::getString))
+            .toList();
+        ItemStack writable = held.transmuteCopy(Items.WRITABLE_BOOK, held.getCount());
+        writable.set(DataComponents.WRITABLE_BOOK_CONTENT, new WritableBookContent(pages));
+        writable.remove(DataComponents.WRITTEN_BOOK_CONTENT);
+        player.getInventory().setSelectedItem(writable);
+        player.getInventory().setChanged();
+        player.containerMenu.broadcastChanges();
+        context.getSource().sendSystemMessage(Messages.success("Book unsigned."));
         return 1;
     }
 

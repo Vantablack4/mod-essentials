@@ -38,10 +38,10 @@
     },
     {
       "name": "home",
-      "usages": ["/home", "/home <name>"],
+      "usages": ["/home", "/home <name>", "/home <player>:<name>"],
       "aliases": ["ehome", "homes", "ehomes"],
       "upstream": "home",
-      "notes": "Self homes only; no [player:] homes, bed home, or spawn-if-no-home yet."
+      "notes": "Self homes plus admin player-qualified online homes through the upstream player:name syntax. Bed-home and spawn-if-no-home fallback are intentionally governed by normal Fabric respawn/spawn behavior."
     },
     {
       "name": "sethome",
@@ -52,17 +52,17 @@
     },
     {
       "name": "delhome",
-      "usages": ["/delhome <name>"],
+      "usages": ["/delhome <name>", "/delhome <player>:<name>"],
       "aliases": ["edelhome", "remhome", "eremhome", "rmhome", "ermhome"],
       "upstream": "delhome",
-      "notes": "Self homes only; no [player:] delete yet."
+      "notes": "Deletes self homes or admin player-qualified online homes through the upstream player:name syntax."
     },
     {
       "name": "warp",
-      "usages": ["/warp", "/warp <name>", "/warp <name> <player>"],
+      "usages": ["/warp", "/warp <page>", "/warp <name>", "/warp <name> <player>"],
       "aliases": ["ewarp", "warps", "ewarps"],
       "upstream": "warp",
-      "notes": "Lists or teleports caller/admin target; no page argument or per-warp permissions yet."
+      "notes": "Lists paginated warps or teleports caller/admin target; per-warp access is represented by Fabric command permission checks rather than Bukkit per-warp permission nodes."
     },
     {
       "name": "setwarp",
@@ -87,10 +87,10 @@
     },
     {
       "name": "balancetop",
-      "usages": ["/balancetop", "/balancetop <page>"],
+      "usages": ["/balancetop", "/balancetop <page>", "/balancetop force"],
       "aliases": ["ebalancetop", "baltop", "ebaltop"],
       "upstream": "balancetop",
-      "notes": "Ranks persisted local balances; no Vault or backend economy provider integration."
+      "notes": "Ranks persisted local balances. The upstream force form is accepted as an admin no-op because Fabric local balances are read synchronously; no Vault or backend economy provider integration."
     },
     {
       "name": "pay",
@@ -115,17 +115,17 @@
     },
     {
       "name": "eco",
-      "usages": ["/eco give <player> <amount>", "/eco take <player> <amount>", "/eco set <player> <amount>", "/eco reset <player>"],
+      "usages": ["/eco give <player|*|**> <amount[%]>", "/eco take <player|*|**> <amount[%]>", "/eco set <player|*|**> <amount[%]>", "/eco reset <player|*|**>"],
       "aliases": ["eeco", "economy", "eeconomy"],
       "upstream": "eco",
-      "notes": "Admin local balance mutation with EssentialsX starting/min/max money bounds; offline targets require a stored account or cached Minecraft profile."
+      "notes": "Admin local balance mutation with EssentialsX starting/min/max money bounds, online wildcard *, stored-account wildcard **, and percent amounts for give/take/set; offline targets require a stored account or cached Minecraft profile."
     },
     {
       "name": "sell",
-      "usages": ["/sell hand [amount]", "/sell <item> [amount]", "/sell all", "/sell inventory", "/sell blocks [amount]"],
+      "usages": ["/sell hand [amount|stacks]", "/sell <item> [amount|stacks]", "/sell all", "/sell inventory", "/sell invent", "/sell blocks [amount|stacks]"],
       "aliases": ["esell"],
       "upstream": "sell",
-      "notes": "Sells held, matching, block, or inventory items using local worth.properties values; named-item selling follows local economy settings."
+      "notes": "Sells held, matching, block, or inventory items using local worth.properties values; accepts upstream invent and stack-suffixed amounts such as 1s; named-item selling follows local economy settings."
     },
     {
       "name": "setworth",
@@ -136,10 +136,10 @@
     },
     {
       "name": "worth",
-      "usages": ["/worth", "/worth hand [amount]", "/worth <item> [amount]", "/worth all", "/worth inventory", "/worth blocks [amount]"],
+      "usages": ["/worth", "/worth hand [amount|stacks]", "/worth <item> [amount|stacks]", "/worth all", "/worth inventory", "/worth invent", "/worth blocks [amount|stacks]"],
       "aliases": ["eprice", "price", "eworth"],
       "upstream": "worth",
-      "notes": "Calculates sell value from local worth.properties for held, matching, block, or inventory items."
+      "notes": "Calculates sell value from local worth.properties for held, matching, block, or inventory items; accepts upstream invent and stack-suffixed amounts such as 1s."
     },
     {
       "name": "back",
@@ -195,7 +195,7 @@
       "usages": ["/tptoggle", "/tptoggle <on|off>", "/tptoggle <player> [on|off]"],
       "aliases": ["etptoggle"],
       "upstream": "tptoggle",
-      "notes": "Runtime teleport-request toggle; persistent per-player storage is not implemented yet."
+      "notes": "Persistent per-player teleport-request toggle backed by config/mod_essentials/teleport-state.properties."
     },
     {
       "name": "tpauto",
@@ -241,10 +241,10 @@
     },
     {
       "name": "tppos",
-      "usages": ["/tppos <x y z> [dimension]"],
+      "usages": ["/tppos <x y z> [dimension]", "/tppos <x y z> [yaw] [pitch] [dimension]"],
       "aliases": ["etppos"],
       "upstream": "tppos",
-      "notes": "No yaw/pitch/world-name syntax yet."
+      "notes": "Teleports to coordinates with optional yaw, pitch, and Fabric dimension argument."
     },
     {
       "name": "top",
@@ -297,10 +297,10 @@
     },
     {
       "name": "clearinventory",
-      "usages": ["/clearinventory", "/clearinventory <player>"],
+      "usages": ["/clearinventory", "/clearinventory <player|*> [item|*|**] [amount]", "/clearinventory [item|*|**] [amount]"],
       "aliases": ["ci", "eci", "clean", "eclean", "clear", "eclear", "clearinvent", "eclearinvent", "eclearinventory"],
       "upstream": "clearinventory",
-      "notes": "Clears all inventory for self/one target; confirmation toggle is supported, but item filters, amount, and wildcard are not complete yet."
+      "notes": "Clears self, one online target, or all online targets with optional Fabric item filter and amount; * and ** are accepted as all-item selectors."
     },
     {
       "name": "clearinventoryconfirmtoggle",
@@ -353,10 +353,10 @@
     },
     {
       "name": "itemname",
-      "usages": ["/itemname <name>", "/itemname clear"],
+      "usages": ["/itemname [name]", "/itemname clear"],
       "aliases": ["eitemname", "iname", "einame", "itemrename", "irename", "eitemrename", "eirename"],
       "upstream": "itemname",
-      "notes": "Sets or clears held item custom name."
+      "notes": "Sets or clears held item custom name; empty/no-argument execution clears the name like upstream."
     },
     {
       "name": "itemlore",
@@ -367,10 +367,10 @@
     },
     {
       "name": "book",
-      "usages": ["/book title <title>", "/book author <author>"],
+      "usages": ["/book", "/book sign", "/book unsign", "/book title <title>", "/book author <author>"],
       "aliases": ["ebook"],
       "upstream": "book",
-      "notes": "Edits writable/written book title and author metadata."
+      "notes": "Signs writable books, unsigns written books, and edits title/author metadata while preserving vanilla book pages."
     },
     {
       "name": "potion",
@@ -479,10 +479,10 @@
     },
     {
       "name": "weather",
-      "usages": ["/weather <storm|sun> [seconds]", "/sun [seconds]", "/storm [seconds]"],
+      "usages": ["/weather <storm|sun> [seconds] [dimension]", "/sun [seconds] [dimension]", "/storm [seconds] [dimension]"],
       "aliases": ["rain", "erain", "sky", "esky", "storm", "estorm", "sun", "esun", "eweather"],
       "upstream": "weather",
-      "notes": "Global server weather API; console world form not implemented."
+      "notes": "Accepts the Essentials weather modes, durations, and optional Fabric dimension syntax while using the Minecraft server weather API exposed by this runtime."
     },
     {
       "name": "thunder",
@@ -717,10 +717,10 @@
     },
     {
       "name": "mail",
-      "usages": ["/mail", "/mail read [page]", "/mail send <player> <message>", "/mail sendall <message>", "/mail clear", "/mail clear <number>", "/mail delete <number>", "/mail clearall"],
+      "usages": ["/mail", "/mail read [page]", "/mail send <player> <message>", "/mail sendtemp <player> <expire time> <message>", "/mail sendall <message>", "/mail sendtempall <expire time> <message>", "/mail clear", "/mail clear <number>", "/mail clear <player> [number]", "/mail delete <number>", "/mail clearall"],
       "aliases": ["email", "eemail", "memo", "ememo"],
       "upstream": "mail",
-      "notes": "Durable local Fabric mail store for online, cached-profile, or name-keyed recipients; sendtemp expiry and offline Bukkit user migration are not implemented."
+      "notes": "Durable local Fabric mail store for online, cached-profile, or name-keyed recipients; supports timed sendtemp expiry, sendtempall for online players, clear <player> [number], and console send shortcut. Offline Bukkit user migration and all-known-user sendall are not implemented."
     },
     {
       "name": "nick",
@@ -780,24 +780,24 @@
     },
     {
       "name": "banip",
-      "usages": ["/banip <ip|online-player> [reason]"],
+      "usages": ["/banip <ip|player> [reason]"],
       "aliases": ["ebanip"],
       "upstream": "banip",
-      "notes": "Admin command backed by Minecraft's IpBanList; matching online players are disconnected."
+      "notes": "Admin command backed by Minecraft's IpBanList; accepts an IP, an online player, or a player remembered by config/mod_essentials/logout-locations.properties. Matching online players are disconnected."
     },
     {
       "name": "tempbanip",
-      "usages": ["/tempbanip <ip|online-player> <duration> [reason]"],
+      "usages": ["/tempbanip <ip|player> <duration> [reason]"],
       "aliases": ["etempbanip"],
       "upstream": "tempbanip",
-      "notes": "Expiring IP ban backed by Minecraft's IpBanListEntry."
+      "notes": "Expiring IP ban backed by Minecraft's IpBanListEntry; player targets use the last IP observed on Fabric join/disconnect."
     },
     {
       "name": "unbanip",
-      "usages": ["/unbanip <ip>"],
+      "usages": ["/unbanip <ip|player>"],
       "aliases": ["eunbanip", "pardonip", "epardonip"],
       "upstream": "unbanip",
-      "notes": "Removes a local Minecraft IP ban."
+      "notes": "Removes a local Minecraft IP ban; player targets use the last IP observed on Fabric join/disconnect."
     },
     {
       "name": "kick",
@@ -815,10 +815,10 @@
     },
     {
       "name": "mute",
-      "usages": ["/mute <player>", "/mute <player> <duration|perm|off> [reason]"],
+      "usages": ["/mute <player>", "/mute <player> [datediff] [reason]", "/mute <player> off", "/unmute <player>"],
       "aliases": ["emute", "silence", "esilence", "unmute", "eunmute"],
       "upstream": "mute",
-      "notes": "Durable local mute state in config/mod_essentials/mutes.properties enforced through Fabric's server chat and signed command-message allow events."
+      "notes": "Durable local mute state in config/mod_essentials/mutes.properties enforced through Fabric's server chat and signed command-message allow events. /unmute and /eunmute are unmute-only; non-duration second arguments become permanent mute reasons like upstream."
     },
     {
       "name": "setjail",
@@ -920,31 +920,31 @@
     },
     {
       "name": "ptime",
-      "usages": ["/ptime", "/ptime <time|reset>", "/ptime <time|reset> <player>"],
+      "usages": ["/ptime", "/ptime <get|list|show|display> [player|*]", "/ptime <time|reset> [player|*]"],
       "aliases": ["eptime", "playertime", "eplayertime"],
       "upstream": "ptime",
-      "notes": "Persistent player-specific clock packet preference; reset restores server clock sync."
+      "notes": "Persistent player-specific clock packet preference with online-player and * loops; relative-vs-fixed @ semantics are not fully modeled."
     },
     {
       "name": "pweather",
-      "usages": ["/pweather", "/pweather <sun|storm|reset>", "/pweather <sun|storm|reset> <player>"],
+      "usages": ["/pweather", "/pweather <get|list|show|display> [player|*]", "/pweather <sun|storm|thunder|clear|reset> [player|*]"],
       "aliases": ["epweather", "playerweather", "eplayerweather"],
       "upstream": "pweather",
-      "notes": "Persistent player-specific weather packet preference for online players."
+      "notes": "Persistent player-specific weather packet preference with online-player and * loops."
     },
     {
       "name": "condense",
-      "usages": ["/condense"],
+      "usages": ["/condense", "/condense <item>"],
       "aliases": ["econdense", "compact", "ecompact", "blocks", "eblocks", "toblocks", "etoblocks"],
       "upstream": "condense",
-      "notes": "Converts common vanilla nuggets/ingots/gems/raw resources into compacted forms when stacks have no custom components."
+      "notes": "Converts all or one requested common vanilla nugget/ingot/gem/raw resource into compacted forms; recipe-derived/custom mod compaction is not complete."
     },
     {
       "name": "unlimited",
-      "usages": ["/unlimited", "/unlimited <item>", "/unlimited list", "/unlimited clear"],
+      "usages": ["/unlimited", "/unlimited <item> [player]", "/unlimited list [player]", "/unlimited clear [player]"],
       "aliases": ["eunlimited", "ul", "unl", "eul", "eunl"],
       "upstream": "unlimited",
-      "notes": "Admin durable per-player unlimited held-item refill implemented through server ticks."
+      "notes": "Admin durable per-player unlimited held-item refill implemented through server ticks for online players."
     },
     {
       "name": "powertool",
@@ -1004,17 +1004,17 @@
     },
     {
       "name": "nuke",
-      "usages": ["/nuke", "/nuke <amount>"],
+      "usages": ["/nuke", "/nuke <player|all>", "/nuke <amount>"],
       "aliases": ["enuke"],
       "upstream": "nuke",
-      "notes": "Drops a cluster of primed TNT entities over the looked location."
+      "notes": "Drops upstream-style TNT clusters over online players; numeric amount remains as a Fabric extension for the looked location."
     },
     {
       "name": "fireball",
-      "usages": ["/fireball", "/fireball <power>"],
+      "usages": ["/fireball", "/fireball <type>", "/fireball <type> <speed>", "/fireball <speed>"],
       "aliases": ["efireball", "fireentity", "efireentity", "fireskull", "efireskull"],
       "upstream": "fireball",
-      "notes": "Launches a large fireball from the caller."
+      "notes": "Launches Fabric projectile equivalents for fireball, small, large, arrow, skull, egg, snowball, expbottle, dragon, splashpotion, lingeringpotion, trident, and windcharge."
     },
     {
       "name": "beezooka",
@@ -1074,17 +1074,17 @@
     },
     {
       "name": "editsign",
-      "usages": ["/editsign set <line> <text>", "/editsign clear", "/editsign clear <line>", "/editsign <line> <text>"],
+      "usages": ["/editsign set <line> <text>", "/editsign clear [line]", "/editsign copy [line]", "/editsign paste [line]", "/editsign <line> <text>"],
       "aliases": ["sign", "esign", "eeditsign"],
       "upstream": "editsign",
-      "notes": "Admin command editing the front/back text of the sign block the caller is looking at through the vanilla sign block entity API."
+      "notes": "Admin command editing/copying/pasting the front/back text of the looked sign through the vanilla sign block entity API; Bukkit SignChangeEvent hooks are not replicated."
     },
     {
       "name": "remove",
-      "usages": ["/remove <all|mobs|monsters|animals|drops|entity> [radius]"],
+      "usages": ["/remove <all|tamed|named|drops|items|arrows|boats|minecarts|xp|paintings|itemframes|endercrystals|monsters|hostile|animals|passive|ambient|mobs|entity[,entity...]> [radius|world]"],
       "aliases": ["eremove", "butcher", "ebutcher", "killall", "ekillall", "mobkill", "emobkill"],
       "upstream": "remove",
-      "notes": "Removes nearby non-player entities matching a broad category or registry id."
+      "notes": "Removes nearby or loaded-world non-player entities matching Essentials categories, comma-separated categories, or Fabric entity registry ids."
     },
     {
       "name": "firework",
@@ -1154,7 +1154,7 @@
       "usages": ["/tpoffline <player>"],
       "aliases": ["otp", "offlinetp", "tpoff", "etpoffline"],
       "upstream": "tpoffline",
-      "notes": "Registered as an explicit unsupported command; offline player NBT mutation is unsafe in this Fabric port without a dedicated player-data DataFixer/save bridge."
+      "notes": "Teleports the command sender to the target player's last logout location captured by Fabric join/disconnect events in config/mod_essentials/logout-locations.properties. This matches upstream's stored logout-location behavior without mutating offline player NBT; it only works after the target has been observed by this Fabric port."
     }
   ]
 }

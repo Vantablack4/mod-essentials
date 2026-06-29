@@ -2,21 +2,25 @@ package com.vantablack4.essentials;
 
 import static com.mojang.brigadier.arguments.BoolArgumentType.getBool;
 import static com.mojang.brigadier.arguments.DoubleArgumentType.getDouble;
+import static com.mojang.brigadier.arguments.FloatArgumentType.getFloat;
 import static com.mojang.brigadier.arguments.IntegerArgumentType.getInteger;
 import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 
 import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -36,6 +40,7 @@ import com.vantablack4.essentials.commands.kit.KitCommands;
 import com.vantablack4.essentials.commands.player.PlayerUtilityCommands;
 import com.vantablack4.essentials.commands.social.SocialCommands;
 import com.vantablack4.essentials.commands.world.WorldUtilityCommands;
+import com.vantablack4.essentials.i18n.EssentialsXMessages;
 
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -48,7 +53,9 @@ import net.minecraft.commands.arguments.GameModeArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -57,6 +64,7 @@ import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.clock.WorldClock;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
@@ -74,6 +82,8 @@ public final class EssentialsCommands {
     private static final String POSITION_ARGUMENT = "position";
     private static final String DIMENSION_ARGUMENT = "dimension";
     private static final String MESSAGE_ARGUMENT = "message";
+    private static final String PAGE_ARGUMENT = "page";
+    private static final String ARGUMENTS_ARGUMENT = "arguments";
     private static final String ENABLED_ARGUMENT = "enabled";
     private static final String TARGET_OR_STATE_ARGUMENT = "targetOrState";
     private static final String STATE_ARGUMENT = "state";
@@ -83,8 +93,12 @@ public final class EssentialsCommands {
     private static final String SECONDS_ARGUMENT = "seconds";
     private static final String MODE_ARGUMENT = "mode";
     private static final String TIME_ARGUMENT = "time";
+    private static final String YAW_ARGUMENT = "yaw";
+    private static final String PITCH_ARGUMENT = "pitch";
     private static final int DEFAULT_NEAR_RADIUS = 100;
     private static final int DEFAULT_WEATHER_SECONDS = 300;
+    private static final int WARPS_PER_PAGE = 10;
+    private static final EssentialsXMessages UPSTREAM_MESSAGES = EssentialsXMessages.loadDefault();
 
     private final EssentialsConfig config;
     private final EssentialsStorage storage;
@@ -137,34 +151,13 @@ public final class EssentialsCommands {
         dispatcher.register(spawnCommand("spawn"));
         dispatcher.register(setSpawnCommand("setspawn"));
 
-        dispatcher.register(Commands.literal("home")
-            .executes(context -> home(context, "home"))
-            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
-                .suggests(this::suggestHomes)
-                .executes(context -> home(context, getString(context, NAME_ARGUMENT)))));
-        dispatcher.register(Commands.literal("sethome")
-            .executes(context -> setHome(context, "home"))
-            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
-                .executes(context -> setHome(context, getString(context, NAME_ARGUMENT)))));
-        dispatcher.register(Commands.literal("delhome")
-            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
-                .suggests(this::suggestHomes)
-                .executes(context -> deleteHome(context, getString(context, NAME_ARGUMENT)))));
+        dispatcher.register(homeCommand("home"));
+        dispatcher.register(setHomeCommand("sethome"));
+        dispatcher.register(deleteHomeCommand("delhome"));
         dispatcher.register(Commands.literal("homes").executes(this::homes));
 
-        dispatcher.register(Commands.literal("warp")
-            .executes(this::warps)
-            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
-                .suggests(this::suggestWarps)
-                .executes(context -> warp(context, getString(context, NAME_ARGUMENT)))
-                .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
-                    .requires(permissions::admin)
-                    .suggests(this::suggestPlayers)
-                    .executes(context -> {
-                        ServerPlayer target = resolveTarget(context, TARGET_ARGUMENT);
-                        return target == null ? 0 : warp(context, getString(context, NAME_ARGUMENT), target);
-                    }))));
-        dispatcher.register(Commands.literal("warps").executes(this::warps));
+        dispatcher.register(warpCommand("warp"));
+        dispatcher.register(warpsCommand("warps"));
         dispatcher.register(Commands.literal("setwarp").requires(permissions::admin)
             .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
                 .executes(context -> setWarp(context, getString(context, NAME_ARGUMENT)))));
@@ -460,7 +453,7 @@ public final class EssentialsCommands {
     private LiteralArgumentBuilder<CommandSourceStack> homeCommand(String name) {
         return Commands.literal(name)
             .executes(context -> home(context, "home"))
-            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
+            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.greedyString())
                 .suggests(this::suggestHomes)
                 .executes(context -> home(context, getString(context, NAME_ARGUMENT))));
     }
@@ -474,7 +467,7 @@ public final class EssentialsCommands {
 
     private LiteralArgumentBuilder<CommandSourceStack> deleteHomeCommand(String name) {
         return Commands.literal(name)
-            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.word())
+            .then(Commands.argument(NAME_ARGUMENT, StringArgumentType.greedyString())
                 .suggests(this::suggestHomes)
                 .executes(context -> deleteHome(context, getString(context, NAME_ARGUMENT))));
     }
@@ -492,6 +485,13 @@ public final class EssentialsCommands {
                         ServerPlayer target = resolveTarget(context, TARGET_ARGUMENT);
                         return target == null ? 0 : warp(context, getString(context, NAME_ARGUMENT), target);
                     })));
+    }
+
+    private LiteralArgumentBuilder<CommandSourceStack> warpsCommand(String name) {
+        return Commands.literal(name)
+            .executes(this::warps)
+            .then(Commands.argument(PAGE_ARGUMENT, IntegerArgumentType.integer(1))
+                .executes(context -> warps(context, getInteger(context, PAGE_ARGUMENT))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> setWarpCommand(String name) {
@@ -554,9 +554,25 @@ public final class EssentialsCommands {
         return Commands.literal(name)
             .requires(permissions::admin)
             .then(Commands.argument(POSITION_ARGUMENT, Vec3Argument.vec3())
-                .executes(context -> teleportSelfToPosition(context, context.getSource().getLevel()))
+                .executes(context -> teleportSelfToPosition(context, context.getSource().getLevel(), null, null))
                 .then(Commands.argument(DIMENSION_ARGUMENT, DimensionArgument.dimension())
-                    .executes(context -> teleportSelfToPosition(context, DimensionArgument.getDimension(context, DIMENSION_ARGUMENT)))));
+                    .executes(context -> teleportSelfToPosition(context, DimensionArgument.getDimension(context, DIMENSION_ARGUMENT), null, null)))
+                .then(Commands.argument(YAW_ARGUMENT, FloatArgumentType.floatArg())
+                    .executes(context -> teleportSelfToPosition(context, context.getSource().getLevel(), getFloat(context, YAW_ARGUMENT), null))
+                    .then(Commands.argument(PITCH_ARGUMENT, FloatArgumentType.floatArg(-90.0F, 90.0F))
+                        .executes(context -> teleportSelfToPosition(
+                            context,
+                            context.getSource().getLevel(),
+                            getFloat(context, YAW_ARGUMENT),
+                            getFloat(context, PITCH_ARGUMENT)
+                        ))
+                        .then(Commands.argument(DIMENSION_ARGUMENT, DimensionArgument.dimension())
+                            .executes(context -> teleportSelfToPosition(
+                                context,
+                                DimensionArgument.getDimension(context, DIMENSION_ARGUMENT),
+                                getFloat(context, YAW_ARGUMENT),
+                                getFloat(context, PITCH_ARGUMENT)
+                            ))))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> topCommand(String name) {
@@ -687,12 +703,9 @@ public final class EssentialsCommands {
         return Commands.literal(name)
             .requires(permissions::admin)
             .executes(context -> clearInventory(context, context.getSource().getPlayerOrException(), "/" + name))
-            .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
+            .then(Commands.argument(ARGUMENTS_ARGUMENT, StringArgumentType.greedyString())
                 .suggests(this::suggestPlayers)
-                .executes(context -> {
-                    ServerPlayer target = resolveTarget(context, TARGET_ARGUMENT);
-                    return target == null ? 0 : clearInventory(context, target, "/" + name + " " + getString(context, TARGET_ARGUMENT));
-                }));
+                .executes(context -> clearInventory(context, getString(context, ARGUMENTS_ARGUMENT), "/" + name + " " + getString(context, ARGUMENTS_ARGUMENT))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> clearInventoryConfirmToggleCommand(String name) {
@@ -924,9 +937,23 @@ public final class EssentialsCommands {
             .requires(permissions::admin)
             .then(Commands.argument(MODE_ARGUMENT, StringArgumentType.word())
                 .suggests(this::suggestWeatherModes)
-                .executes(context -> weatherMode(context, getString(context, MODE_ARGUMENT), DEFAULT_WEATHER_SECONDS))
+                .executes(context -> weatherMode(context, context.getSource().getLevel(), getString(context, MODE_ARGUMENT), DEFAULT_WEATHER_SECONDS))
+                .then(Commands.argument(DIMENSION_ARGUMENT, DimensionArgument.dimension())
+                    .executes(context -> weatherMode(
+                        context,
+                        DimensionArgument.getDimension(context, DIMENSION_ARGUMENT),
+                        getString(context, MODE_ARGUMENT),
+                        DEFAULT_WEATHER_SECONDS
+                    )))
                 .then(Commands.argument(SECONDS_ARGUMENT, IntegerArgumentType.integer(1))
-                    .executes(context -> weatherMode(context, getString(context, MODE_ARGUMENT), getInteger(context, SECONDS_ARGUMENT)))));
+                    .executes(context -> weatherMode(context, context.getSource().getLevel(), getString(context, MODE_ARGUMENT), getInteger(context, SECONDS_ARGUMENT)))
+                    .then(Commands.argument(DIMENSION_ARGUMENT, DimensionArgument.dimension())
+                        .executes(context -> weatherMode(
+                            context,
+                            DimensionArgument.getDimension(context, DIMENSION_ARGUMENT),
+                            getString(context, MODE_ARGUMENT),
+                            getInteger(context, SECONDS_ARGUMENT)
+                        )))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> thunderCommand(String name) {
@@ -951,9 +978,13 @@ public final class EssentialsCommands {
     private LiteralArgumentBuilder<CommandSourceStack> weatherCommand(String name, boolean raining, boolean thundering, String successMessage) {
         return Commands.literal(name)
             .requires(permissions::admin)
-            .executes(context -> weather(context, DEFAULT_WEATHER_SECONDS, raining, thundering, successMessage))
+            .executes(context -> weather(context, context.getSource().getLevel(), DEFAULT_WEATHER_SECONDS, raining, thundering, successMessage))
+            .then(Commands.argument(DIMENSION_ARGUMENT, DimensionArgument.dimension())
+                .executes(context -> weather(context, DimensionArgument.getDimension(context, DIMENSION_ARGUMENT), DEFAULT_WEATHER_SECONDS, raining, thundering, successMessage)))
             .then(Commands.argument(SECONDS_ARGUMENT, IntegerArgumentType.integer(1))
-                .executes(context -> weather(context, getInteger(context, SECONDS_ARGUMENT), raining, thundering, successMessage)));
+                .executes(context -> weather(context, context.getSource().getLevel(), getInteger(context, SECONDS_ARGUMENT), raining, thundering, successMessage))
+                .then(Commands.argument(DIMENSION_ARGUMENT, DimensionArgument.dimension())
+                    .executes(context -> weather(context, DimensionArgument.getDimension(context, DIMENSION_ARGUMENT), getInteger(context, SECONDS_ARGUMENT), raining, thundering, successMessage))));
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> broadcastCommand(String name) {
@@ -991,9 +1022,10 @@ public final class EssentialsCommands {
     private int spawn(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         backService.record(target);
         storage.spawn().orElseGet(() -> worldSpawn(context.getSource().getServer())).teleport(context.getSource().getServer(), target);
-        target.sendSystemMessage(Messages.success("Spawn noktasına ışınlandın."));
+        target.sendSystemMessage(tl("teleporting", "Teleporting..."));
         if (context.getSource().getPlayer() != target) {
-            context.getSource().sendSystemMessage(Messages.success(displayName(target) + " spawn noktasına ışınlandı."));
+            target.sendSystemMessage(tl("teleportAtoB", "{0} teleported you to {1}.", sourceName(context.getSource()), "spawn"));
+            context.getSource().sendSystemMessage(tl("teleporting", "Teleporting..."));
         }
         return 1;
     }
@@ -1007,26 +1039,38 @@ public final class EssentialsCommands {
         StoredLocation location = StoredLocation.capture(player);
         String normalized = EssentialsStorage.normalizeName(group);
         storage.setSpawn(normalized, location);
-        context.getSource().sendSystemMessage(Messages.success("Spawn noktası ayarlandı (" + normalized + "): " + location.display()));
+        context.getSource().sendSystemMessage(tl("spawnSet", "Spawn location set for group {0}.", normalized));
         return 1;
     }
 
     private int home(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        String normalized = EssentialsStorage.normalizeName(name);
-        if (normalized.isBlank()) {
-            context.getSource().sendSystemMessage(Messages.error("Geçersiz ev adı."));
+        HomeReference reference = resolveHomeReference(context, player, name);
+        if (reference == null) {
             return 0;
         }
-        return storage.home(player.getUUID(), normalized)
+        String normalized = reference.name();
+        if (normalized.isBlank()) {
+            context.getSource().sendSystemMessage(tl("invalidHomeName", "Invalid home name!"));
+            return 0;
+        }
+        return storage.home(reference.ownerUuid(), normalized)
             .map(location -> {
                 backService.record(player);
                 location.teleport(context.getSource().getServer(), player);
-                player.sendSystemMessage(Messages.success("Eve ışınlandın: " + normalized));
+                player.sendSystemMessage(tl(
+                    "teleportHome",
+                    "Teleporting to {0}.",
+                    reference.otherPlayer() ? reference.ownerDisplayName() + ":" + normalized : normalized
+                ));
                 return 1;
             })
             .orElseGet(() -> {
-                context.getSource().sendSystemMessage(Messages.error("Ev bulunamadı: " + normalized));
+                context.getSource().sendSystemMessage(tl(
+                    "invalidHome",
+                    "Home {0} doesn't exist!",
+                    reference.otherPlayer() ? reference.ownerDisplayName() + ":" + normalized : normalized
+                ));
                 return 0;
             });
     }
@@ -1035,37 +1079,53 @@ public final class EssentialsCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String normalized = EssentialsStorage.normalizeName(name);
         if (normalized.isBlank()) {
-            context.getSource().sendSystemMessage(Messages.error("Geçersiz ev adı."));
+            context.getSource().sendSystemMessage(tl("invalidHomeName", "Invalid home name!"));
             return 0;
         }
         if (!storage.homes(player.getUUID()).contains(normalized) && storage.homes(player.getUUID()).size() >= config.maxHomesPerPlayer()) {
-            context.getSource().sendSystemMessage(Messages.error("Maksimum ev sayısına ulaştın: " + config.maxHomesPerPlayer()));
+            context.getSource().sendSystemMessage(tl("maxHomes", "You cannot set more than {0} homes.", config.maxHomesPerPlayer()));
             return 0;
         }
         storage.setHome(player.getUUID(), normalized, StoredLocation.capture(player));
-        context.getSource().sendSystemMessage(Messages.success("Ev ayarlandı: " + normalized));
+        context.getSource().sendSystemMessage(tl("homeSet", "Home set to current location."));
         return 1;
     }
 
     private int deleteHome(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
-        ServerPlayer player = context.getSource().getPlayerOrException();
-        String normalized = EssentialsStorage.normalizeName(name);
-        if (storage.deleteHome(player.getUUID(), normalized)) {
-            context.getSource().sendSystemMessage(Messages.success("Ev silindi: " + normalized));
+        ServerPlayer player = context.getSource().getPlayer();
+        HomeReference reference = resolveHomeReference(context, player, name);
+        if (reference == null) {
+            return 0;
+        }
+        String normalized = reference.name();
+        if (storage.deleteHome(reference.ownerUuid(), normalized)) {
+            context.getSource().sendSystemMessage(tl(
+                "deleteHome",
+                "Home {0} has been removed.",
+                reference.otherPlayer() ? reference.ownerDisplayName() + ":" + normalized : normalized
+            ));
             return 1;
         }
-        context.getSource().sendSystemMessage(Messages.error("Ev bulunamadı: " + normalized));
+        context.getSource().sendSystemMessage(tl(
+            "invalidHome",
+            "Home {0} doesn't exist!",
+            reference.otherPlayer() ? reference.ownerDisplayName() + ":" + normalized : normalized
+        ));
         return 0;
     }
 
     private int homes(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         List<String> homes = storage.homes(player.getUUID());
-        context.getSource().sendSystemMessage(Messages.line("Homes", homes.isEmpty() ? "none" : String.join(", ", homes)));
+        context.getSource().sendSystemMessage(tl("homes", "Homes: {0}", homes.isEmpty() ? "none" : String.join(", ", homes)));
         return homes.isEmpty() ? 0 : 1;
     }
 
     private int warp(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
+        Integer page = parsePositiveInteger(name);
+        if (page != null && storage.warp(EssentialsStorage.normalizeName(name)).isEmpty()) {
+            return warps(context, page);
+        }
         return warp(context, name, context.getSource().getPlayerOrException());
     }
 
@@ -1075,21 +1135,37 @@ public final class EssentialsCommands {
             .map(location -> {
                 backService.record(target);
                 location.teleport(context.getSource().getServer(), target);
-                target.sendSystemMessage(Messages.success("Warp noktasına ışınlandın: " + normalized));
+                target.sendSystemMessage(tl("warpingTo", "Warping to {0}.", normalized));
                 if (context.getSource().getPlayer() != target) {
-                    context.getSource().sendSystemMessage(Messages.success(displayName(target) + " warp noktasına ışınlandı: " + normalized));
+                    context.getSource().sendSystemMessage(tl("warpingTo", "Warping to {0}.", normalized));
                 }
                 return 1;
             })
             .orElseGet(() -> {
-                context.getSource().sendSystemMessage(Messages.error("Warp bulunamadı: " + normalized));
+                context.getSource().sendSystemMessage(tl("warpNotExist", "That warp does not exist."));
                 return 0;
             });
     }
 
     private int warps(CommandContext<CommandSourceStack> context) {
+        return warps(context, 1);
+    }
+
+    private int warps(CommandContext<CommandSourceStack> context, int page) {
         List<String> warps = storage.warps();
-        context.getSource().sendSystemMessage(Messages.line("Warps", warps.isEmpty() ? "none" : String.join(", ", warps)));
+        if (warps.isEmpty()) {
+            context.getSource().sendSystemMessage(tl("noWarpsDefined", "No warps defined."));
+            return 0;
+        }
+        int maxPage = Math.max(1, (int) Math.ceil(warps.size() / (double) WARPS_PER_PAGE));
+        int selectedPage = Math.max(1, Math.min(page, maxPage));
+        int from = (selectedPage - 1) * WARPS_PER_PAGE;
+        int to = Math.min(from + WARPS_PER_PAGE, warps.size());
+        context.getSource().sendSystemMessage(tl(
+            "warps",
+            "Warps: {0}",
+            String.join(", ", warps.subList(from, to)) + (maxPage > 1 ? " (" + selectedPage + "/" + maxPage + ")" : "")
+        ));
         return warps.isEmpty() ? 0 : 1;
     }
 
@@ -1097,21 +1173,21 @@ public final class EssentialsCommands {
         ServerPlayer player = context.getSource().getPlayerOrException();
         String normalized = EssentialsStorage.normalizeName(name);
         if (normalized.isBlank()) {
-            context.getSource().sendSystemMessage(Messages.error("Geçersiz warp adı."));
+            context.getSource().sendSystemMessage(tl("invalidWarpName", "Invalid warp name!"));
             return 0;
         }
         storage.setWarp(normalized, StoredLocation.capture(player));
-        context.getSource().sendSystemMessage(Messages.success("Warp ayarlandı: " + normalized));
+        context.getSource().sendSystemMessage(tl("warpSet", "Warp {0} set.", normalized));
         return 1;
     }
 
     private int deleteWarp(CommandContext<CommandSourceStack> context, String name) {
         String normalized = EssentialsStorage.normalizeName(name);
         if (storage.deleteWarp(normalized)) {
-            context.getSource().sendSystemMessage(Messages.success("Warp silindi: " + normalized));
+            context.getSource().sendSystemMessage(tl("deleteWarp", "Warp {0} has been removed.", normalized));
             return 1;
         }
-        context.getSource().sendSystemMessage(Messages.error("Warp bulunamadı: " + normalized));
+        context.getSource().sendSystemMessage(tl("warpNotExist", "That warp does not exist."));
         return 0;
     }
 
@@ -1122,14 +1198,14 @@ public final class EssentialsCommands {
     private int back(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         if (backService.teleportBack(context.getSource().getServer(), target)) {
             if (context.getSource().getPlayer() == target) {
-                target.sendSystemMessage(Messages.success("Önceki konuma ışınlandın."));
+                target.sendSystemMessage(tl("teleporting", "Teleporting..."));
             } else {
-                context.getSource().sendSystemMessage(Messages.success(displayName(target) + " önceki konumuna ışınlandı."));
-                target.sendSystemMessage(Messages.success("Önceki konumuna ışınlandın."));
+                context.getSource().sendSystemMessage(tl("backOther", "Returned {0} to previous location.", displayName(target)));
+                target.sendSystemMessage(tl("teleporting", "Teleporting..."));
             }
             return 1;
         }
-        context.getSource().sendSystemMessage(Messages.error("Önceki konum kaydı yok: " + displayName(target)));
+        context.getSource().sendSystemMessage(tl("noLocationFound", "No valid location found."));
         return 0;
     }
 
@@ -1143,7 +1219,8 @@ public final class EssentialsCommands {
         return switch (result.status()) {
             case SENT -> {
                 target.sendSystemMessage(result.request().targetMessage());
-                requester.sendSystemMessage(Messages.success("Işınlanma isteği gönderildi: " + displayName(target)));
+                requester.sendSystemMessage(tl("requestSent", "Request sent to {0}.", displayName(target)));
+                requester.sendSystemMessage(tl("typeTpacancel", "To cancel this request, type /tpacancel."));
                 yield 1;
             }
             case AUTO_ACCEPTED -> 1;
@@ -1152,11 +1229,11 @@ public final class EssentialsCommands {
                 yield 0;
             }
             case TARGET_TELEPORT_DISABLED -> {
-                requester.sendSystemMessage(Messages.error(displayName(target) + " ışınlanma isteklerini kapatmış."));
+                requester.sendSystemMessage(tl("teleportDisabled", "{0} has teleportation disabled.", displayName(target)));
                 yield 0;
             }
             case DUPLICATE -> {
-                requester.sendSystemMessage(Messages.error("Bu oyuncuya zaten bekleyen bir ışınlanma isteğin var: " + displayName(target)));
+                requester.sendSystemMessage(tl("requestSentAlready", "You have already sent {0} a teleport request.", displayName(target)));
                 yield 0;
             }
         };
@@ -1187,9 +1264,7 @@ public final class EssentialsCommands {
                 default -> skipped++;
             }
         }
-        context.getSource().sendSystemMessage(Messages.success(
-            "Tpaall: " + sent + " istek gönderildi, " + autoAccepted + " otomatik kabul, " + duplicate + " zaten bekliyor, " + skipped + " atlandı."
-        ));
+        context.getSource().sendSystemMessage(tl("teleportAAll", "Teleport request sent to all players..."));
         return sent + autoAccepted;
     }
 
@@ -1198,10 +1273,10 @@ public final class EssentialsCommands {
         if (rawRequester != null && isWildcard(rawRequester)) {
             TpaService.BulkAcceptResult result = tpaService.acceptAll(context.getSource().getServer(), target);
             if (result.accepted() == 0) {
-                target.sendSystemMessage(Messages.error("Bekleyen ışınlanma isteği yok."));
+                target.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 return 0;
             }
-            target.sendSystemMessage(Messages.success("Tüm ışınlanma istekleri kabul edildi: " + result.accepted()));
+            target.sendSystemMessage(tl("requestAcceptedAll", "Accepted {0} pending teleport request(s).", result.accepted()));
             return result.accepted();
         }
 
@@ -1224,10 +1299,10 @@ public final class EssentialsCommands {
             List<TpaService.TeleportRequest> denied = tpaService.denyAll(target);
             denied.forEach(request -> notifyDenied(context, target, request));
             if (denied.isEmpty()) {
-                target.sendSystemMessage(Messages.error("Bekleyen ışınlanma isteği yok."));
+                target.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 return 0;
             }
-            target.sendSystemMessage(Messages.success("Tüm ışınlanma istekleri reddedildi: " + denied.size()));
+            target.sendSystemMessage(tl("requestDeniedAll", "Denied {0} pending teleport request(s).", denied.size()));
             return denied.size();
         }
 
@@ -1244,11 +1319,11 @@ public final class EssentialsCommands {
         return request
             .map(deniedRequest -> {
                 notifyDenied(context, target, deniedRequest);
-                target.sendSystemMessage(Messages.success("Işınlanma isteği reddedildi."));
+                target.sendSystemMessage(tl("requestDenied", "Teleport request denied."));
                 return 1;
             })
             .orElseGet(() -> {
-                target.sendSystemMessage(Messages.error("Bekleyen ışınlanma isteği yok."));
+                target.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 return 0;
             });
     }
@@ -1259,10 +1334,10 @@ public final class EssentialsCommands {
             List<TpaService.TeleportRequest> cancelled = tpaService.cancel(requester);
             cancelled.forEach(request -> notifyCancelled(context, requester, request));
             if (cancelled.isEmpty()) {
-                requester.sendSystemMessage(Messages.error("İptal edilecek ışınlanma isteği yok."));
+                requester.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 return 0;
             }
-            requester.sendSystemMessage(Messages.success("Işınlanma istekleri iptal edildi: " + cancelled.size()));
+            requester.sendSystemMessage(tl("teleportRequestAllCancelled", "All outstanding teleport requests cancelled."));
             return cancelled.size();
         }
 
@@ -1273,11 +1348,11 @@ public final class EssentialsCommands {
         return tpaService.cancel(requester, target)
             .map(request -> {
                 notifyCancelled(context, requester, request);
-                requester.sendSystemMessage(Messages.success("Işınlanma isteği iptal edildi: " + displayName(target)));
+                requester.sendSystemMessage(tl("teleportRequestSpecificCancelled", "Outstanding teleport request with {0} cancelled.", displayName(target)));
                 return 1;
             })
             .orElseGet(() -> {
-                requester.sendSystemMessage(Messages.error("Bu oyuncuya bekleyen ışınlanma isteğin yok: " + displayName(target)));
+                requester.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 return 0;
             });
     }
@@ -1296,7 +1371,7 @@ public final class EssentialsCommands {
             enabled = firstArgumentState;
         } else {
             if (!permissions.admin(context.getSource())) {
-                context.getSource().sendSystemMessage(Messages.error("Başka oyuncular için bu komutu kullanamazsın."));
+                context.getSource().sendSystemMessage(tl("noAccessCommand", "You do not have access to that command."));
                 return 0;
             }
             target = resolveTargetName(context, rawTargetOrState);
@@ -1319,17 +1394,20 @@ public final class EssentialsCommands {
 
     private int reportTpacceptResult(ServerPlayer target, TpaService.AcceptResult result) {
         return switch (result) {
-            case ACCEPTED -> 1;
+            case ACCEPTED -> {
+                target.sendSystemMessage(tl("requestAccepted", "Teleport request accepted."));
+                yield 1;
+            }
             case MISSING -> {
-                target.sendSystemMessage(Messages.error("Bekleyen ışınlanma isteği yok."));
+                target.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 yield 0;
             }
             case EXPIRED -> {
-                target.sendSystemMessage(Messages.error("Işınlanma isteğinin süresi dolmuş."));
+                target.sendSystemMessage(tl("requestTimedOut", "Teleport request has timed out."));
                 yield 0;
             }
             case REQUESTER_OFFLINE -> {
-                target.sendSystemMessage(Messages.error("İstek sahibi çevrimdışı."));
+                target.sendSystemMessage(tl("noPendingRequest", "You do not have a pending request."));
                 yield 0;
             }
         };
@@ -1342,7 +1420,7 @@ public final class EssentialsCommands {
     ) {
         ServerPlayer requester = context.getSource().getServer().getPlayerList().getPlayer(request.requesterUuid());
         if (requester != null) {
-            requester.sendSystemMessage(Messages.error(displayName(target) + " ışınlanma isteğini reddetti."));
+            requester.sendSystemMessage(tl("requestDeniedFrom", "{0} denied your teleport request.", displayName(target)));
         }
     }
 
@@ -1363,15 +1441,17 @@ public final class EssentialsCommands {
         boolean auto,
         boolean enabled
     ) {
-        String label = auto ? "Otomatik ışınlanma" : "Işınlanma";
-        String state = enabled ? "açıldı" : "kapandı";
         ServerPlayer sender = context.getSource().getPlayer();
-        target.sendSystemMessage(Messages.success(label + " " + state + "."));
+        target.sendSystemMessage(auto
+            ? tl(enabled ? "autoTeleportEnabled" : "autoTeleportDisabled", enabled ? "You are now automatically approving teleport requests." : "You are no longer automatically approving teleport requests.")
+            : tl(enabled ? "teleportationEnabled" : "teleportationDisabled", enabled ? "Teleportation enabled." : "Teleportation disabled."));
         if (sender != target) {
-            context.getSource().sendSystemMessage(Messages.success(label + " " + state + ": " + displayName(target)));
+            context.getSource().sendSystemMessage(auto
+                ? tl(enabled ? "autoTeleportEnabledFor" : "autoTeleportDisabledFor", enabled ? "{0} is now automatically approving teleport requests." : "{0} is no longer automatically approving teleport requests.", displayName(target))
+                : tl(enabled ? "teleportationEnabledFor" : "teleportationDisabledFor", enabled ? "Teleportation enabled for {0}." : "Teleportation disabled for {0}.", displayName(target)));
         }
         if (auto && enabled && !tpaService.isTeleportEnabled(target)) {
-            target.sendSystemMessage(Messages.error("Işınlanma kapalıyken otomatik kabul çalışmaz. /tptoggle ile açabilirsin."));
+            target.sendSystemMessage(tl("teleportationDisabledWarning", "You must enable teleportation before other players can teleport to you."));
         }
     }
 
@@ -1397,6 +1477,98 @@ public final class EssentialsCommands {
         }
     }
 
+    private static Integer parsePositiveInteger(String rawValue) {
+        try {
+            int value = Integer.parseInt(rawValue.trim());
+            return value > 0 ? value : null;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private HomeReference resolveHomeReference(CommandContext<CommandSourceStack> context, ServerPlayer self, String rawName) {
+        String trimmed = rawName == null ? "" : rawName.trim();
+        int split = trimmed.indexOf(':');
+        if (split < 0) {
+            if (self == null) {
+                context.getSource().sendSystemMessage(tl("playerNotFound", "Player not found."));
+                return null;
+            }
+            return new HomeReference(self.getUUID(), displayName(self), EssentialsStorage.normalizeName(trimmed), false);
+        }
+
+        if (!permissions.admin(context.getSource())) {
+            context.getSource().sendSystemMessage(tl("noAccessCommand", "You do not have access to that command."));
+            return null;
+        }
+        String rawTarget = trimmed.substring(0, split).trim();
+        String rawHome = trimmed.substring(split + 1).trim();
+        ServerPlayer owner = PlayerTargets.find(context.getSource().getServer(), rawTarget)
+            .orElseGet(() -> {
+                context.getSource().sendSystemMessage(tl("playerNotFound", "Player not found."));
+                return null;
+            });
+        if (owner == null) {
+            return null;
+        }
+        String homeName = rawHome.isBlank() ? "home" : rawHome;
+        return new HomeReference(owner.getUUID(), displayName(owner), EssentialsStorage.normalizeName(homeName), true);
+    }
+
+    private Item resolveItemFilter(CommandContext<CommandSourceStack> context, String rawItem) {
+        String target = rawItem.trim().toLowerCase(Locale.ROOT);
+        for (var entry : BuiltInRegistries.ITEM.entrySet()) {
+            Identifier id = entry.getKey().identifier();
+            if (id.toString().equalsIgnoreCase(target)
+                || id.getPath().equalsIgnoreCase(target)
+                || ("minecraft:" + id.getPath()).equalsIgnoreCase(target)) {
+                return entry.getValue();
+            }
+        }
+        context.getSource().sendSystemMessage(Messages.error("Unknown item: " + rawItem));
+        return null;
+    }
+
+    private static String itemId(Item item) {
+        Identifier id = BuiltInRegistries.ITEM.getKey(item);
+        return id == null ? item.toString() : id.toString();
+    }
+
+    private static List<String> tokenizeArguments(String rawArguments) {
+        List<String> tokens = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean quoted = false;
+        boolean escaped = false;
+        for (int i = 0; i < rawArguments.length(); i++) {
+            char character = rawArguments.charAt(i);
+            if (escaped) {
+                current.append(character);
+                escaped = false;
+                continue;
+            }
+            if (character == '\\' && quoted) {
+                escaped = true;
+                continue;
+            }
+            if (character == '"') {
+                quoted = !quoted;
+                continue;
+            }
+            if (Character.isWhitespace(character) && !quoted) {
+                if (!current.isEmpty()) {
+                    tokens.add(current.toString());
+                    current.setLength(0);
+                }
+                continue;
+            }
+            current.append(character);
+        }
+        if (!current.isEmpty()) {
+            tokens.add(current.toString());
+        }
+        return tokens;
+    }
+
     private int teleportSelfToTarget(CommandContext<CommandSourceStack> context, boolean bypassToggle) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         ServerPlayer target = resolveTarget(context, TARGET_ARGUMENT);
@@ -1407,7 +1579,7 @@ public final class EssentialsCommands {
             return 0;
         }
         teleportPlayerToPlayer(context, player, target);
-        context.getSource().sendSystemMessage(Messages.success(displayName(target) + " konumuna ışınlandın."));
+        context.getSource().sendSystemMessage(tl("teleportToPlayer", "Teleporting to {0}.", displayName(target)));
         return 1;
     }
 
@@ -1421,9 +1593,9 @@ public final class EssentialsCommands {
             return 0;
         }
         teleportPlayerToPlayer(context, target, destination);
-        context.getSource().sendSystemMessage(Messages.success(displayName(target) + " oyuncusu " + displayName(destination) + " konumuna ışınlandı."));
+        context.getSource().sendSystemMessage(tl("teleporting", "Teleporting..."));
         if (context.getSource().getPlayer() != target) {
-            target.sendSystemMessage(Messages.success(displayName(destination) + " konumuna ışınlandın."));
+            target.sendSystemMessage(tl("teleportAtoB", "{0} teleported you to {1}.", sourceName(context.getSource()), displayName(destination)));
         }
         return 1;
     }
@@ -1437,13 +1609,18 @@ public final class EssentialsCommands {
             return 0;
         }
         Vec3 position = Vec3Argument.getVec3(context, POSITION_ARGUMENT);
-        return teleportPlayerToPosition(context, target, level, position);
+        return teleportPlayerToPosition(context, target, level, position, null, null);
     }
 
-    private int teleportSelfToPosition(CommandContext<CommandSourceStack> context, ServerLevel level) throws CommandSyntaxException {
+    private int teleportSelfToPosition(
+        CommandContext<CommandSourceStack> context,
+        ServerLevel level,
+        Float yaw,
+        Float pitch
+    ) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Vec3 position = Vec3Argument.getVec3(context, POSITION_ARGUMENT);
-        return teleportPlayerToPosition(context, player, level, position);
+        return teleportPlayerToPosition(context, player, level, position, yaw, pitch);
     }
 
     private int teleportTargetHere(CommandContext<CommandSourceStack> context, boolean bypassToggle) throws CommandSyntaxException {
@@ -1456,8 +1633,8 @@ public final class EssentialsCommands {
             return 0;
         }
         teleportPlayerToPlayer(context, target, destination);
-        context.getSource().sendSystemMessage(Messages.success(displayName(target) + " yanına ışınlandı."));
-        target.sendSystemMessage(Messages.success(displayName(destination) + " yanına ışınlandın."));
+        context.getSource().sendSystemMessage(tl("teleporting", "Teleporting..."));
+        target.sendSystemMessage(tl("teleportAtoB", "{0} teleported you to {1}.", sourceName(context.getSource()), displayName(destination)));
         return 1;
     }
 
@@ -1468,10 +1645,10 @@ public final class EssentialsCommands {
                 continue;
             }
             teleportPlayerToPlayer(context, player, destination);
-            player.sendSystemMessage(Messages.success(displayName(destination) + " yanına ışınlandın."));
+            player.sendSystemMessage(tl("teleportAtoB", "{0} teleported you to {1}.", sourceName(context.getSource()), displayName(destination)));
             moved++;
         }
-        context.getSource().sendSystemMessage(Messages.success(moved + " oyuncu " + displayName(destination) + " yanına ışınlandı."));
+        context.getSource().sendSystemMessage(tl("teleportAll", "Teleporting all players..."));
         return moved;
     }
 
@@ -1479,7 +1656,7 @@ public final class EssentialsCommands {
         if (bypassToggle || tpaService.isTeleportEnabled(target)) {
             return true;
         }
-        context.getSource().sendSystemMessage(Messages.error(displayName(target) + " ışınlanmayı kapatmış. Bypass için /tpo veya /tpohere kullan."));
+        context.getSource().sendSystemMessage(tl("teleportDisabled", "{0} has teleportation disabled.", displayName(target)));
         return false;
     }
 
@@ -1490,10 +1667,10 @@ public final class EssentialsCommands {
         Vec3 destination = new Vec3(destinationBlock.getX() + 0.5D, destinationBlock.getY(), destinationBlock.getZ() + 0.5D);
         AABB movedBox = player.getBoundingBox().move(destination.x - player.getX(), destination.y - player.getY(), destination.z - player.getZ());
         if (!level.noCollision(player, movedBox)) {
-            context.getSource().sendSystemMessage(Messages.error("Güvenli üst konum bulunamadı."));
+            context.getSource().sendSystemMessage(tl("unsafeTeleportDestination", "The teleport destination is unsafe."));
             return 0;
         }
-        return teleportPlayerToPosition(context, player, level, destination);
+        return teleportPlayerToPosition(context, player, level, destination, null, null);
     }
 
     private int heal(CommandContext<CommandSourceStack> context, ServerPlayer target) {
@@ -1554,15 +1731,117 @@ public final class EssentialsCommands {
     }
 
     private int clearInventory(CommandContext<CommandSourceStack> context, ServerPlayer target, String commandText) {
+        return clearInventory(context, List.of(target), null, null, commandText);
+    }
+
+    private int clearInventory(CommandContext<CommandSourceStack> context, String rawArguments, String commandText) throws CommandSyntaxException {
+        List<String> tokens = tokenizeArguments(rawArguments);
+        if (tokens.isEmpty()) {
+            return clearInventory(context, context.getSource().getPlayerOrException(), commandText);
+        }
+
+        int index = 0;
+        List<ServerPlayer> targets = new ArrayList<>();
+        String first = tokens.get(index);
+        if (isWildcard(first)) {
+            targets.addAll(context.getSource().getServer().getPlayerList().getPlayers());
+            index++;
+        } else {
+            ServerPlayer namedTarget = PlayerTargets.find(context.getSource().getServer(), first).orElse(null);
+            if (namedTarget != null && (tokens.size() > 1 || context.getSource().getPlayer() == null)) {
+                targets.add(namedTarget);
+                index++;
+            } else {
+                ServerPlayer sender = context.getSource().getPlayer();
+                if (sender == null) {
+                    context.getSource().sendSystemMessage(tl("playerNotFound", "Player not found."));
+                    return 0;
+                }
+                targets.add(sender);
+            }
+        }
+
+        Item itemFilter = null;
+        Integer amount = null;
+        if (index < tokens.size()) {
+            String itemToken = tokens.get(index++);
+            if (!itemToken.equals("*") && !itemToken.equals("**")) {
+                itemFilter = resolveItemFilter(context, itemToken);
+                if (itemFilter == null) {
+                    return 0;
+                }
+            }
+        }
+        if (index < tokens.size()) {
+            amount = parsePositiveInteger(tokens.get(index++));
+            if (amount == null) {
+                context.getSource().sendSystemMessage(Messages.error("Invalid amount: " + tokens.get(index - 1)));
+                return 0;
+            }
+        }
+        if (index < tokens.size()) {
+            context.getSource().sendSystemMessage(Messages.error("Too many arguments for clearinventory."));
+            return 0;
+        }
+        return clearInventory(context, targets, itemFilter, amount, commandText);
+    }
+
+    private int clearInventory(
+        CommandContext<CommandSourceStack> context,
+        List<ServerPlayer> targets,
+        Item itemFilter,
+        Integer amount,
+        String commandText
+    ) {
         ServerPlayer sender = context.getSource().getPlayer();
         if (sender != null && playerStateService.requiresClearInventoryConfirmation(sender, commandText)) {
             sender.sendSystemMessage(Messages.error("Envanteri temizlemek için komutu tekrar yaz: " + commandText));
             return 0;
         }
-        target.getInventory().clearContent();
-        target.containerMenu.broadcastChanges();
-        context.getSource().sendSystemMessage(Messages.success("Envanter temizlendi: " + displayName(target)));
-        return 1;
+        int removed = 0;
+        for (ServerPlayer target : targets) {
+            removed += clearInventoryTarget(target, itemFilter, amount);
+            target.containerMenu.broadcastChanges();
+        }
+        String targetLabel = targets.size() == 1 ? displayName(targets.getFirst()) : targets.size() + " player(s)";
+        String filterLabel = itemFilter == null ? "all items" : itemId(itemFilter);
+        context.getSource().sendSystemMessage(Messages.success("Inventory cleared: " + targetLabel + " (" + removed + " " + filterLabel + ")."));
+        return targets.isEmpty() ? 0 : 1;
+    }
+
+    private static int clearInventoryTarget(ServerPlayer target, Item itemFilter, Integer amount) {
+        if (itemFilter == null && amount == null) {
+            int removed = countInventoryItems(target);
+            target.getInventory().clearContent();
+            return removed;
+        }
+
+        int remaining = amount == null ? Integer.MAX_VALUE : amount;
+        int removed = 0;
+        for (int slot = 0; slot < target.getInventory().getContainerSize() && remaining > 0; slot++) {
+            ItemStack stack = target.getInventory().getItem(slot);
+            if (stack.isEmpty() || (itemFilter != null && stack.getItem() != itemFilter)) {
+                continue;
+            }
+            int count = Math.min(stack.getCount(), remaining);
+            removed += count;
+            remaining -= count;
+            if (count >= stack.getCount()) {
+                target.getInventory().setItem(slot, ItemStack.EMPTY);
+            } else {
+                stack.shrink(count);
+            }
+        }
+        target.getInventory().setChanged();
+        return removed;
+    }
+
+    private static int countInventoryItems(ServerPlayer target) {
+        int count = 0;
+        for (int slot = 0; slot < target.getInventory().getContainerSize(); slot++) {
+            count += target.getInventory().getItem(slot).getCount();
+        }
+        return count;
     }
 
     private int clearInventoryConfirmToggle(CommandContext<CommandSourceStack> context, String commandName) throws CommandSyntaxException {
@@ -1846,14 +2125,14 @@ public final class EssentialsCommands {
         String oldNormalized = EssentialsStorage.normalizeName(oldName);
         String newNormalized = EssentialsStorage.normalizeName(newName);
         if (oldNormalized.isBlank() || newNormalized.isBlank()) {
-            player.sendSystemMessage(Messages.error("Invalid home name."));
+            player.sendSystemMessage(tl("invalidHomeName", "Invalid home name!"));
             return 0;
         }
         if (storage.renameHome(player.getUUID(), oldNormalized, newNormalized)) {
-            player.sendSystemMessage(Messages.success("Home renamed: " + oldNormalized + " -> " + newNormalized));
+            player.sendSystemMessage(tl("homeRenamed", "Home {0} has been renamed to {1}.", oldNormalized, newNormalized));
             return 1;
         }
-        player.sendSystemMessage(Messages.error("Home not found: " + oldNormalized));
+        player.sendSystemMessage(tl("invalidHome", "Home {0} doesn't exist!", oldNormalized));
         return 0;
     }
 
@@ -1861,12 +2140,12 @@ public final class EssentialsCommands {
         String normalized = EssentialsStorage.normalizeName(name);
         return storage.warp(normalized)
             .map(location -> {
-                context.getSource().sendSystemMessage(Messages.line("Warp", normalized));
+                context.getSource().sendSystemMessage(tl("warpInfo", "Information for warp {0}:", normalized));
                 context.getSource().sendSystemMessage(Messages.line("Location", location.display()));
                 return 1;
             })
             .orElseGet(() -> {
-                context.getSource().sendSystemMessage(Messages.error("Warp not found: " + normalized));
+                context.getSource().sendSystemMessage(tl("warpNotExist", "That warp does not exist."));
                 return 0;
             });
     }
@@ -1888,7 +2167,7 @@ public final class EssentialsCommands {
         Vec3 position = player.position();
         double factor = dimensionScale(player.level().dimension(), targetLevel.dimension());
         Vec3 target = new Vec3(Math.floor(position.x * factor) + 0.5D, position.y, Math.floor(position.z * factor) + 0.5D);
-        return teleportPlayerToPosition(context, player, targetLevel, target);
+        return teleportPlayerToPosition(context, player, targetLevel, target, null, null);
     }
 
     private int jump(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -1900,7 +2179,7 @@ public final class EssentialsCommands {
         }
         BlockPos block = blockHit.getBlockPos();
         Vec3 target = new Vec3(block.getX() + 0.5D, block.getY() + 1.0D, block.getZ() + 0.5D);
-        return teleportPlayerToPosition(context, player, (ServerLevel) player.level(), target);
+        return teleportPlayerToPosition(context, player, (ServerLevel) player.level(), target, null, null);
     }
 
     private int bottom(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -1913,7 +2192,7 @@ public final class EssentialsCommands {
             if (hasTeleportCollision(level, player, target)) {
                 continue;
             }
-            return teleportPlayerToPosition(context, player, level, target);
+            return teleportPlayerToPosition(context, player, level, target, null, null);
         }
         player.sendSystemMessage(Messages.error("No safe bottom location found."));
         return 0;
@@ -1956,7 +2235,14 @@ public final class EssentialsCommands {
         return 1;
     }
 
-    private int weather(CommandContext<CommandSourceStack> context, int seconds, boolean raining, boolean thundering, String successMessage) {
+    private int weather(
+        CommandContext<CommandSourceStack> context,
+        ServerLevel level,
+        int seconds,
+        boolean raining,
+        boolean thundering,
+        String successMessage
+    ) {
         int ticks = seconds * 20;
         MinecraftServer server = context.getSource().getServer();
         if (raining) {
@@ -1964,14 +2250,14 @@ public final class EssentialsCommands {
         } else {
             server.setWeatherParameters(ticks, 0, false, false);
         }
-        context.getSource().sendSystemMessage(Messages.success(successMessage));
+        context.getSource().sendSystemMessage(Messages.success(successMessage + " (" + level.dimension().identifier() + ")"));
         return 1;
     }
 
-    private int weatherMode(CommandContext<CommandSourceStack> context, String mode, int seconds) {
+    private int weatherMode(CommandContext<CommandSourceStack> context, ServerLevel level, String mode, int seconds) {
         return switch (mode.toLowerCase(Locale.ROOT)) {
-            case "storm", "rain" -> weather(context, seconds, true, false, "Yağmur başladı.");
-            case "sun", "clear", "sky" -> weather(context, seconds, false, false, "Hava açıldı.");
+            case "storm", "rain" -> weather(context, level, seconds, true, false, "Yağmur başladı.");
+            case "sun", "clear", "sky" -> weather(context, level, seconds, false, false, "Hava açıldı.");
             default -> {
                 context.getSource().sendSystemMessage(Messages.error("Geçersiz hava modu: " + mode));
                 yield 0;
@@ -1980,7 +2266,7 @@ public final class EssentialsCommands {
     }
 
     private int thunder(CommandContext<CommandSourceStack> context, boolean enabled, int seconds) {
-        return weather(context, seconds, enabled, enabled, "Fırtına " + (enabled ? "açıldı." : "kapandı."));
+        return weather(context, context.getSource().getLevel(), seconds, enabled, enabled, "Fırtına " + (enabled ? "açıldı." : "kapandı."));
     }
 
     private int broadcast(CommandContext<CommandSourceStack> context) {
@@ -1996,20 +2282,34 @@ public final class EssentialsCommands {
         StoredLocation.capture(destination).teleport(context.getSource().getServer(), player);
     }
 
-    private int teleportPlayerToPosition(CommandContext<CommandSourceStack> context, ServerPlayer player, ServerLevel level, Vec3 position) {
+    private int teleportPlayerToPosition(
+        CommandContext<CommandSourceStack> context,
+        ServerPlayer player,
+        ServerLevel level,
+        Vec3 position,
+        Float yaw,
+        Float pitch
+    ) {
         BlockPos blockPosition = BlockPos.containing(position);
         if (!Level.isInSpawnableBounds(blockPosition)) {
-            context.getSource().sendSystemMessage(Messages.error("Konum dünya sınırları dışında."));
+            context.getSource().sendSystemMessage(tl("teleportInvalidLocation", "The value of coordinates cannot be over 30000000."));
             return 0;
         }
         if (hasTeleportCollision(level, player, position)) {
-            context.getSource().sendSystemMessage(Messages.error("Konum güvenli değil."));
+            context.getSource().sendSystemMessage(tl("unsafeTeleportDestination", "The teleport destination is unsafe."));
             return 0;
         }
-        StoredLocation location = new StoredLocation(level.dimension(), position.x, position.y, position.z, player.getYRot(), player.getXRot());
+        StoredLocation location = new StoredLocation(
+            level.dimension(),
+            position.x,
+            position.y,
+            position.z,
+            yaw == null ? player.getYRot() : yaw,
+            pitch == null ? player.getXRot() : pitch
+        );
         backService.record(player);
         location.teleport(context.getSource().getServer(), player);
-        context.getSource().sendSystemMessage(Messages.success(displayName(player) + " ışınlandı: " + location.display()));
+        context.getSource().sendSystemMessage(tl("teleporting", "Teleporting..."));
         return 1;
     }
 
@@ -2035,7 +2335,7 @@ public final class EssentialsCommands {
     private ServerPlayer resolveTargetName(CommandContext<CommandSourceStack> context, String rawTarget) {
         return PlayerTargets.find(context.getSource().getServer(), rawTarget)
             .orElseGet(() -> {
-                context.getSource().sendSystemMessage(Messages.error("Oyuncu bulunamadı: " + rawTarget));
+                context.getSource().sendSystemMessage(tl("playerNotFound", "Player not found."));
                 return null;
             });
     }
@@ -2094,6 +2394,18 @@ public final class EssentialsCommands {
 
     private static String displayName(ServerPlayer player) {
         return PlayerTargets.displayName(player);
+    }
+
+    private static String sourceName(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        return player == null
+            ? UPSTREAM_MESSAGES.messageOrDefault(Locale.ROOT, "consoleName", "Console")
+            : displayName(player);
+    }
+
+    private static Component tl(String key, String fallback, Object... arguments) {
+        String message = UPSTREAM_MESSAGES.messageOrDefault(Locale.ROOT, key, fallback, arguments);
+        return Messages.translated(message);
     }
 
     private static Holder<WorldClock> defaultClock(CommandContext<CommandSourceStack> context, ServerLevel level) {
@@ -2226,5 +2538,8 @@ public final class EssentialsCommands {
         SpeedMode(String label) {
             this.label = label;
         }
+    }
+
+    private record HomeReference(UUID ownerUuid, String ownerDisplayName, String name, boolean otherPlayer) {
     }
 }

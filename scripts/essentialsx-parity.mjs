@@ -346,6 +346,8 @@ function analyze(parsedPlugins, manifest) {
   const aliasTotal = upstreamRows.reduce((sum, row) => sum + row.aliases.length, 0);
   const coveredAliasTotal = upstreamRows.reduce((sum, row) => sum + row.coveredAliases.length, 0);
   const usageDiffRows = implementedRows.filter(row => row.canonicalUsage && !row.usageMatches);
+  const usageGapRows = usageDiffRows.filter(row => hasUsageBehaviorGap(row));
+  const syntaxOnlyUsageDiffRows = usageDiffRows.filter(row => !hasUsageBehaviorGap(row));
   const exactParityRows = implementedRows.filter(row => row.usageMatches && row.missingAliases.length === 0);
 
   return {
@@ -355,6 +357,8 @@ function analyze(parsedPlugins, manifest) {
     implementedRows,
     missingRows,
     usageDiffRows,
+    usageGapRows,
+    syntaxOnlyUsageDiffRows,
     exactParityRows,
     extraFabricCommands,
     invalidUpstreamMappings,
@@ -434,6 +438,8 @@ function renderMarkdown(analysis, manifest, manifestPath) {
   lines.push(row("Exact usage and alias parity roots", `${analysis.exactParityRows.length} / ${analysis.upstreamRows.length} (${percent(analysis.exactParityRows.length, analysis.upstreamRows.length)})`));
   lines.push(row("Upstream aliases exposed by Fabric", `${analysis.coveredAliasTotal} / ${analysis.aliasTotal} (${percent(analysis.coveredAliasTotal, analysis.aliasTotal)})`));
   lines.push(row("Covered roots with usage differences", analysis.usageDiffRows.length));
+  lines.push(row("Usage differences marked as behavior gaps", analysis.usageGapRows.length));
+  lines.push(row("Usage differences classified as syntax-only", analysis.syntaxOnlyUsageDiffRows.length));
   lines.push(row("Missing upstream roots", analysis.missingRows.length));
   lines.push("");
 
@@ -488,10 +494,17 @@ function renderMarkdown(analysis, manifest, manifestPath) {
   if (analysis.usageDiffRows.length === 0) {
     lines.push("No covered upstream roots have usage differences.");
   } else {
-    lines.push("| Upstream root | Upstream usage | Fabric usages |");
-    lines.push("| --- | --- | --- |");
+    lines.push("| Upstream root | Classification | Upstream usage | Fabric usages | Notes |");
+    lines.push("| --- | --- | --- | --- | --- |");
     for (const rowData of analysis.usageDiffRows) {
-      lines.push(row(code(rowData.name), code(rowData.canonicalUsage), codeList(rowData.fabricUsages)));
+      const notes = rowData.matchedFabric.map(command => command.notes).filter(Boolean).join("; ");
+      lines.push(row(
+        code(rowData.name),
+        hasUsageBehaviorGap(rowData) ? "behavior gap" : "syntax-only",
+        code(rowData.canonicalUsage),
+        codeList(rowData.fabricUsages),
+        notes
+      ));
     }
   }
   lines.push("");
@@ -573,12 +586,14 @@ function printSummary(analysis) {
   console.log(`Covered upstream roots: ${analysis.implementedRows.length}/${analysis.upstreamRows.length} (${percent(analysis.implementedRows.length, analysis.upstreamRows.length)})`);
   console.log(`Aliases exposed: ${analysis.coveredAliasTotal}/${analysis.aliasTotal} (${percent(analysis.coveredAliasTotal, analysis.aliasTotal)})`);
   console.log(`Usage differences on covered roots: ${analysis.usageDiffRows.length}`);
+  console.log(`Usage behavior gaps: ${analysis.usageGapRows.length}`);
+  console.log(`Syntax-only usage differences: ${analysis.syntaxOnlyUsageDiffRows.length}`);
 }
 
 function hasParityGaps(analysis) {
   return analysis.missingRows.length > 0 ||
     analysis.coveredAliasTotal < analysis.aliasTotal ||
-    analysis.usageDiffRows.length > 0 ||
+    analysis.usageGapRows.length > 0 ||
     analysis.invalidUpstreamMappings.length > 0 ||
     analysis.duplicateManifestNames.length > 0 ||
     analysis.duplicateUpstreamCommands.length > 0;
@@ -593,6 +608,8 @@ function summarizeForJson(analysis) {
     upstreamAliases: analysis.aliasTotal,
     exposedAliases: analysis.coveredAliasTotal,
     usageDifferences: analysis.usageDiffRows.length,
+    usageBehaviorGaps: analysis.usageGapRows.length,
+    syntaxOnlyUsageDifferences: analysis.syntaxOnlyUsageDiffRows.length,
     exactParityRoots: analysis.exactParityRows.length,
     extraFabricOnlyRoots: analysis.extraFabricCommands.map(command => command.name),
     invalidUpstreamMappings: analysis.invalidUpstreamMappings.map(command => ({
@@ -600,6 +617,30 @@ function summarizeForJson(analysis) {
       upstream: command.upstream
     }))
   };
+}
+
+function hasUsageBehaviorGap(rowData) {
+  const notes = rowData.matchedFabric
+    .map(command => command.notes)
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (!notes) {
+    return false;
+  }
+
+  return [
+    /\bnot (?:complete|configured|implemented|wired|supported|available|replicated|permission-integrated|safe|fully)\b/,
+    /\bno (?:bed|page|per-|permission|offline|yaw|pitch|vault|backend|bukkit|data|delay|range|full|custom|item|player|target|world|selector|filter|metadata|integration|profile|bridge)/,
+    /\bonly[.;,]?\s+no\b/,
+    /\b(?:requires|needs) [^.]*\bbridge\b/,
+    /\bunsupported\b/,
+    /\bdisabled\b/,
+    /\bcompatibility root\b/,
+    /\bplaceholder\b/,
+    /\blimitation\b/,
+    /\bpartial\b/
+  ].some(pattern => pattern.test(notes));
 }
 
 main();

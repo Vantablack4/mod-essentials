@@ -1,13 +1,19 @@
 package com.vantablack4.essentials.commands.world;
 
+import static com.mojang.brigadier.arguments.DoubleArgumentType.getDouble;
 import static com.mojang.brigadier.arguments.IntegerArgumentType.getInteger;
 import static com.mojang.brigadier.arguments.StringArgumentType.getString;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -29,20 +35,45 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.features.TreeFeatures;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ambient.AmbientCreature;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.fish.WaterAnimal;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.decoration.painting.Painting;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Slime;
+import net.minecraft.world.entity.npc.Npc;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
+import net.minecraft.world.entity.projectile.hurtingprojectile.DragonFireball;
 import net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball;
+import net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball;
+import net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull;
+import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.WindCharge;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownExperienceBottle;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownLingeringPotion;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion;
+import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -65,11 +96,49 @@ public final class WorldUtilityCommands {
     private static final String TYPE_ARGUMENT = "type";
     private static final String AMOUNT_ARGUMENT = "amount";
     private static final String RADIUS_ARGUMENT = "radius";
+    private static final String SPEED_ARGUMENT = "speed";
     private static final String META_ARGUMENT = "meta";
     private static final String LINE_ARGUMENT = "line";
     private static final String TEXT_ARGUMENT = "text";
     private static final String STATE_ARGUMENT = "state";
     private static final int DEFAULT_RADIUS = 64;
+    private static final List<String> FIREBALL_TYPES = List.of(
+        "fireball",
+        "large",
+        "small",
+        "arrow",
+        "skull",
+        "egg",
+        "snowball",
+        "expbottle",
+        "dragon",
+        "splashpotion",
+        "lingeringpotion",
+        "trident",
+        "windcharge"
+    );
+    private static final List<String> REMOVE_TYPES = List.of(
+        "all",
+        "entities",
+        "tamed",
+        "named",
+        "drops",
+        "items",
+        "arrows",
+        "boats",
+        "minecarts",
+        "xp",
+        "paintings",
+        "itemframes",
+        "endercrystals",
+        "monsters",
+        "hostile",
+        "animals",
+        "passive",
+        "ambient",
+        "mobs"
+    );
+    private static final Map<UUID, List<Component>> SIGN_COPY = new ConcurrentHashMap<>();
 
     private WorldUtilityCommands() {
     }
@@ -133,16 +202,20 @@ public final class WorldUtilityCommands {
 
     private static LiteralArgumentBuilder<CommandSourceStack> nukeCommand(String name, Predicate<CommandSourceStack> admin) {
         return Commands.literal(name).requires(admin)
-            .executes(context -> nuke(context, 8))
-            .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer(1, 64))
-                .executes(context -> nuke(context, getInteger(context, AMOUNT_ARGUMENT))));
+            .executes(WorldUtilityCommands::nukeOnlinePlayers)
+            .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.word())
+                .suggests((context, builder) -> SharedSuggestionProvider.suggest(playerAndWildcardSuggestions(context), builder))
+                .executes(context -> nukeArgument(context, getString(context, TARGET_ARGUMENT))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> fireballCommand(String name, Predicate<CommandSourceStack> admin) {
         return Commands.literal(name).requires(admin)
-            .executes(context -> fireball(context, 1))
-            .then(Commands.argument(POWER_ARGUMENT, IntegerArgumentType.integer(1, 8))
-                .executes(context -> fireball(context, getInteger(context, POWER_ARGUMENT))));
+            .executes(context -> fireball(context, "fireball", 2.0D))
+            .then(Commands.argument(TYPE_ARGUMENT, StringArgumentType.word())
+                .suggests((context, builder) -> SharedSuggestionProvider.suggest(FIREBALL_TYPES, builder))
+                .executes(context -> fireball(context, getString(context, TYPE_ARGUMENT), 2.0D))
+                .then(Commands.argument(SPEED_ARGUMENT, DoubleArgumentType.doubleArg(0.0D, 10.0D))
+                    .executes(context -> fireball(context, getString(context, TYPE_ARGUMENT), getDouble(context, SPEED_ARGUMENT)))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> launchEntityCommand(
@@ -214,6 +287,14 @@ public final class WorldUtilityCommands {
                 .executes(context -> clearSign(context, null))
                 .then(Commands.argument(LINE_ARGUMENT, IntegerArgumentType.integer(1, SignText.LINES))
                     .executes(context -> clearSign(context, getInteger(context, LINE_ARGUMENT)))))
+            .then(Commands.literal("copy")
+                .executes(context -> copySign(context, null))
+                .then(Commands.argument(LINE_ARGUMENT, IntegerArgumentType.integer(1, SignText.LINES))
+                    .executes(context -> copySign(context, getInteger(context, LINE_ARGUMENT)))))
+            .then(Commands.literal("paste")
+                .executes(context -> pasteSign(context, null))
+                .then(Commands.argument(LINE_ARGUMENT, IntegerArgumentType.integer(1, SignText.LINES))
+                    .executes(context -> pasteSign(context, getInteger(context, LINE_ARGUMENT)))))
             .then(Commands.argument(LINE_ARGUMENT, IntegerArgumentType.integer(1, SignText.LINES))
                 .then(Commands.argument(TEXT_ARGUMENT, StringArgumentType.greedyString())
                     .executes(context -> setSignLine(context, getInteger(context, LINE_ARGUMENT), getString(context, TEXT_ARGUMENT)))));
@@ -222,10 +303,11 @@ public final class WorldUtilityCommands {
     private static LiteralArgumentBuilder<CommandSourceStack> removeCommand(String name, Predicate<CommandSourceStack> admin) {
         return Commands.literal(name).requires(admin)
             .then(Commands.argument(TYPE_ARGUMENT, StringArgumentType.word())
-                .suggests((context, builder) -> SharedSuggestionProvider.suggest(List.of("all", "mobs", "monsters", "animals", "drops", "items"), builder))
+                .suggests((context, builder) -> SharedSuggestionProvider.suggest(REMOVE_TYPES, builder))
                 .executes(context -> remove(context, getString(context, TYPE_ARGUMENT), DEFAULT_RADIUS))
-                .then(Commands.argument(RADIUS_ARGUMENT, IntegerArgumentType.integer(1, 1024))
-                    .executes(context -> remove(context, getString(context, TYPE_ARGUMENT), getInteger(context, RADIUS_ARGUMENT)))));
+                .then(Commands.argument(RADIUS_ARGUMENT, StringArgumentType.word())
+                    .suggests(WorldUtilityCommands::suggestRemoveRadiusOrWorld)
+                    .executes(context -> remove(context, getString(context, TYPE_ARGUMENT), getString(context, RADIUS_ARGUMENT)))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> fireworkCommand(String name, Predicate<CommandSourceStack> admin) {
@@ -309,7 +391,41 @@ public final class WorldUtilityCommands {
         return amount;
     }
 
-    private static int nuke(CommandContext<CommandSourceStack> context, int amount) throws CommandSyntaxException {
+    private static int nukeOnlinePlayers(CommandContext<CommandSourceStack> context) {
+        List<ServerPlayer> targets = context.getSource().getServer().getPlayerList().getPlayers();
+        if (targets.isEmpty()) {
+            context.getSource().sendSystemMessage(Messages.error("No online players to nuke."));
+            return 0;
+        }
+        int spawned = 0;
+        for (ServerPlayer target : targets) {
+            spawned += spawnNukeCluster(target);
+            target.sendSystemMessage(Messages.error("Nuke incoming."));
+        }
+        context.getSource().sendSystemMessage(Messages.success("Nuke launched for " + targets.size() + " player(s)."));
+        return spawned;
+    }
+
+    private static int nukeArgument(CommandContext<CommandSourceStack> context, String argument) throws CommandSyntaxException {
+        Integer amount = parsePositiveInt(argument);
+        if (amount != null) {
+            return nukeAtLook(context, Math.min(amount, 64));
+        }
+
+        List<ServerPlayer> targets = resolvePlayers(context, argument);
+        if (targets.isEmpty()) {
+            return 0;
+        }
+        int spawned = 0;
+        for (ServerPlayer target : targets) {
+            spawned += spawnNukeCluster(target);
+            target.sendSystemMessage(Messages.error("Nuke incoming."));
+        }
+        context.getSource().sendSystemMessage(Messages.success("Nuke launched for " + targets.size() + " player(s)."));
+        return spawned;
+    }
+
+    private static int nukeAtLook(CommandContext<CommandSourceStack> context, int amount) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         ServerLevel level = (ServerLevel) player.level();
         Vec3 target = lookedPosition(player);
@@ -325,15 +441,61 @@ public final class WorldUtilityCommands {
         return amount;
     }
 
-    private static int fireball(CommandContext<CommandSourceStack> context, int power) throws CommandSyntaxException {
+    private static int spawnNukeCluster(ServerPlayer target) {
+        ServerLevel level = (ServerLevel) target.level();
+        BlockPos center = target.blockPosition();
+        int spawned = 0;
+        for (int offsetX = -10; offsetX <= 10; offsetX += 5) {
+            for (int offsetZ = -10; offsetZ <= 10; offsetZ += 5) {
+                PrimedTnt tnt = new PrimedTnt(level, center.getX() + offsetX + 0.5D, center.getY() + 64.0D, center.getZ() + offsetZ + 0.5D, target);
+                tnt.setFuse(80);
+                level.addFreshEntity(tnt);
+                spawned++;
+            }
+        }
+        return spawned;
+    }
+
+    private static int fireball(CommandContext<CommandSourceStack> context, String rawType, double speed) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
         Vec3 direction = player.getLookAngle().normalize();
-        LargeFireball fireball = new LargeFireball(player.level(), player, direction.scale(Math.max(0.1D, power)), power);
+        String type = rawType.toLowerCase(Locale.ROOT);
+        Double parsedSpeed = parseDouble(type);
+        if (parsedSpeed != null) {
+            type = "fireball";
+            speed = Math.max(0.0D, Math.min(parsedSpeed, 10.0D));
+        }
+        Projectile projectile = createProjectile(type, player, direction);
+        if (projectile == null) {
+            context.getSource().sendSystemMessage(Messages.error("Unknown projectile type: " + rawType));
+            return 0;
+        }
         Vec3 position = player.getEyePosition().add(direction.scale(2.0D));
-        fireball.setPos(position);
-        ((ServerLevel) player.level()).addFreshEntity(fireball);
-        context.getSource().sendSystemMessage(Messages.success("Fireball launched."));
+        projectile.setOwner(player);
+        projectile.setPos(position);
+        projectile.setDeltaMovement(direction.scale(speed));
+        ((ServerLevel) player.level()).addFreshEntity(projectile);
+        context.getSource().sendSystemMessage(Messages.success("Projectile launched: " + type + "."));
         return 1;
+    }
+
+    private static Projectile createProjectile(String type, ServerPlayer player, Vec3 direction) {
+        ServerLevel level = (ServerLevel) player.level();
+        return switch (type) {
+            case "fireball", "large" -> new LargeFireball(level, player, direction, 1);
+            case "small" -> new SmallFireball(level, player, direction);
+            case "arrow" -> new Arrow(level, player, new ItemStack(Items.ARROW), ItemStack.EMPTY);
+            case "skull" -> new WitherSkull(level, player, direction);
+            case "egg" -> new ThrownEgg(level, player, new ItemStack(Items.EGG));
+            case "snowball" -> new Snowball(level, player, new ItemStack(Items.SNOWBALL));
+            case "expbottle" -> new ThrownExperienceBottle(level, player, new ItemStack(Items.EXPERIENCE_BOTTLE));
+            case "dragon" -> new DragonFireball(level, player, direction);
+            case "splashpotion" -> new ThrownSplashPotion(level, player, new ItemStack(Items.SPLASH_POTION));
+            case "lingeringpotion" -> new ThrownLingeringPotion(level, player, new ItemStack(Items.LINGERING_POTION));
+            case "trident" -> new ThrownTrident(level, player, new ItemStack(Items.TRIDENT));
+            case "windcharge" -> new WindCharge(level, player.getX(), player.getEyeY(), player.getZ(), direction);
+            default -> null;
+        };
     }
 
     private static int launchEntity(CommandContext<CommandSourceStack> context, EntityType<?> type, String label) throws CommandSyntaxException {
@@ -461,6 +623,73 @@ public final class WorldUtilityCommands {
         level.sendBlockUpdated(pos, level.getBlockState(pos), level.getBlockState(pos), 3);
         player.sendSystemMessage(Messages.success(line == null ? "Sign cleared." : "Sign line " + line + " cleared."));
         return 1;
+    }
+
+    private static int copySign(CommandContext<CommandSourceStack> context, Integer line) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        ServerLevel level = (ServerLevel) player.level();
+        BlockPos pos = lookedBlock(player).getBlockPos();
+        SignBlockEntity sign = signAt(level, pos, player);
+        if (sign == null) {
+            return 0;
+        }
+
+        boolean front = sign.isFacingFrontText(player);
+        Component[] signLines = sign.getText(front).getMessages(false);
+        List<Component> copy = new ArrayList<>(SIGN_COPY.getOrDefault(player.getUUID(), blankSignCopy()));
+        if (line == null) {
+            copy.clear();
+            for (Component signLine : signLines) {
+                copy.add(signLine);
+            }
+            player.sendSystemMessage(Messages.success("Sign copied."));
+        } else {
+            copy.set(line - 1, signLines[line - 1]);
+            player.sendSystemMessage(Messages.success("Sign line " + line + " copied."));
+        }
+        SIGN_COPY.put(player.getUUID(), copy);
+        return 1;
+    }
+
+    private static int pasteSign(CommandContext<CommandSourceStack> context, Integer line) throws CommandSyntaxException {
+        ServerPlayer player = context.getSource().getPlayerOrException();
+        List<Component> copy = SIGN_COPY.get(player.getUUID());
+        if (copy == null || copy.size() < SignText.LINES) {
+            player.sendSystemMessage(Messages.error("No copied sign text is available."));
+            return 0;
+        }
+
+        ServerLevel level = (ServerLevel) player.level();
+        BlockPos pos = lookedBlock(player).getBlockPos();
+        SignBlockEntity sign = signAt(level, pos, player);
+        if (sign == null) {
+            return 0;
+        }
+
+        boolean front = sign.isFacingFrontText(player);
+        sign.updateText(current -> {
+            SignText updated = current;
+            if (line == null) {
+                for (int index = 0; index < SignText.LINES; index++) {
+                    updated = updated.setMessage(index, copy.get(index));
+                }
+            } else {
+                updated = updated.setMessage(line - 1, copy.get(line - 1));
+            }
+            return updated;
+        }, front);
+        sign.setChanged();
+        level.sendBlockUpdated(pos, level.getBlockState(pos), level.getBlockState(pos), 3);
+        player.sendSystemMessage(Messages.success(line == null ? "Sign pasted." : "Sign line " + line + " pasted."));
+        return 1;
+    }
+
+    private static List<Component> blankSignCopy() {
+        List<Component> copy = new ArrayList<>(SignText.LINES);
+        for (int index = 0; index < SignText.LINES; index++) {
+            copy.add(Component.empty());
+        }
+        return copy;
     }
 
     private static int vanish(CommandContext<CommandSourceStack> context, ServerPlayer target, Boolean requestedState) throws CommandSyntaxException {
@@ -677,32 +906,98 @@ public final class WorldUtilityCommands {
 
     private static int remove(CommandContext<CommandSourceStack> context, String rawType, int radius) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        ServerLevel level = (ServerLevel) player.level();
+        return removeFromLevel(context, (ServerLevel) player.level(), player, rawType, radius);
+    }
+
+    private static int remove(CommandContext<CommandSourceStack> context, String rawType, String radiusOrWorld) throws CommandSyntaxException {
+        Integer radius = parsePositiveInt(radiusOrWorld);
+        if (radius != null) {
+            return remove(context, rawType, Math.min(radius, 1024));
+        }
+
+        ServerLevel level = resolveLevel(context, radiusOrWorld);
+        if (level == null) {
+            context.getSource().sendSystemMessage(Messages.error("Invalid radius or world: " + radiusOrWorld));
+            return 0;
+        }
+        return removeFromLevel(context, level, null, rawType, 0);
+    }
+
+    private static int removeFromLevel(CommandContext<CommandSourceStack> context, ServerLevel level, ServerPlayer center, String rawType, int radius) {
+        List<String> types = parseRemoveTypes(rawType);
         String type = rawType.toLowerCase(Locale.ROOT);
-        AABB area = new AABB(
-            player.getX() - radius,
-            player.getY() - radius,
-            player.getZ() - radius,
-            player.getX() + radius,
-            player.getY() + radius,
-            player.getZ() + radius
-        );
-        List<Entity> entities = level.getEntities(player, area, entity -> shouldRemove(entity, type));
+        List<Entity> entities;
+        if (center == null || radius <= 0) {
+            entities = new ArrayList<>();
+            for (Entity entity : level.getAllEntities()) {
+                if (shouldRemove(entity, types)) {
+                    entities.add(entity);
+                }
+            }
+        } else {
+            AABB area = new AABB(
+                center.getX() - radius,
+                center.getY() - radius,
+                center.getZ() - radius,
+                center.getX() + radius,
+                center.getY() + radius,
+                center.getZ() + radius
+            );
+            entities = level.getEntities(center, area, entity -> shouldRemove(entity, types));
+        }
         entities.forEach(Entity::discard);
-        context.getSource().sendSystemMessage(Messages.success("Removed " + entities.size() + " entit(y/ies)."));
+        context.getSource().sendSystemMessage(Messages.success("Removed " + entities.size() + " entit(y/ies): " + type));
         return entities.size();
     }
 
-    private static boolean shouldRemove(Entity entity, String type) {
+    private static List<String> parseRemoveTypes(String rawType) {
+        List<String> types = new ArrayList<>();
+        for (String part : rawType.split(",")) {
+            String type = part.trim().toLowerCase(Locale.ROOT);
+            if (!type.isBlank()) {
+                types.add(type);
+            }
+        }
+        return types.isEmpty() ? List.of("mobs") : types;
+    }
+
+    private static boolean shouldRemove(Entity entity, List<String> types) {
         if (entity instanceof Player) {
             return false;
         }
+        boolean includesTamed = types.contains("tamed");
+        boolean includesNamed = types.contains("named");
+        if (entity instanceof TamableAnimal tamable && tamable.isTame() && !includesTamed) {
+            return false;
+        }
+        if (entity instanceof LivingEntity && entity.hasCustomName() && !includesNamed) {
+            return false;
+        }
+        for (String type : types) {
+            if (matchesRemoveType(entity, type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesRemoveType(Entity entity, String type) {
         return switch (type) {
-            case "all" -> true;
+            case "*", "all", "entities" -> true;
+            case "tamed" -> entity instanceof TamableAnimal tamable && tamable.isTame();
+            case "named" -> entity instanceof LivingEntity && entity.hasCustomName();
             case "drops", "items" -> entity.getType() == EntityType.ITEM;
-            case "mobs" -> entity instanceof LivingEntity;
-            case "monsters" -> entity instanceof Enemy;
-            case "animals" -> entity instanceof Animal;
+            case "arrows" -> entity instanceof Projectile;
+            case "boats" -> entity instanceof AbstractBoat;
+            case "minecarts" -> entity instanceof AbstractMinecart;
+            case "xp", "experience", "experienceorbs" -> entity instanceof ExperienceOrb;
+            case "paintings" -> entity instanceof Painting;
+            case "itemframes", "item_frames" -> entity instanceof ItemFrame;
+            case "endercrystals", "ender_crystals", "endcrystals", "end_crystals" -> entity.getType() == EntityType.END_CRYSTAL;
+            case "ambient" -> entity instanceof AmbientCreature;
+            case "hostile", "monsters" -> entity instanceof Enemy || entity instanceof Slime;
+            case "passive", "animals" -> entity instanceof Animal || entity instanceof Npc || entity instanceof SnowGolem || entity instanceof WaterAnimal || entity instanceof AmbientCreature;
+            case "mobs" -> entity instanceof Mob;
             default -> EntityType.getKey(entity.getType()).getPath().equals(type) || EntityType.getKey(entity.getType()).toString().equals(type);
         };
     }
@@ -757,6 +1052,94 @@ public final class WorldUtilityCommands {
             case "off", "false", "disable", "disabled", "no" -> false;
             default -> throw new IllegalArgumentException("Expected on/off.");
         };
+    }
+
+    private static Integer parsePositiveInt(String value) {
+        try {
+            int parsed = Integer.parseInt(value);
+            return parsed > 0 ? parsed : null;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static Double parseDouble(String value) {
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private static List<ServerPlayer> resolvePlayers(CommandContext<CommandSourceStack> context, String rawSelector) {
+        String selector = rawSelector.trim();
+        if (selector.equals("*") || selector.equals("**") || selector.equalsIgnoreCase("all")) {
+            return context.getSource().getServer().getPlayerList().getPlayers();
+        }
+
+        List<ServerPlayer> targets = new ArrayList<>();
+        for (String part : selector.split(",")) {
+            String rawTarget = part.trim();
+            if (rawTarget.isBlank()) {
+                continue;
+            }
+            ServerPlayer target = context.getSource().getServer().getPlayerList().getPlayer(rawTarget);
+            if (target == null) {
+                String folded = rawTarget.toLowerCase(Locale.ROOT);
+                target = context.getSource().getServer().getPlayerList().getPlayers().stream()
+                    .filter(player -> player.getScoreboardName().equalsIgnoreCase(rawTarget) || player.getDisplayName().getString().toLowerCase(Locale.ROOT).equals(folded))
+                    .findFirst()
+                    .orElse(null);
+            }
+            if (target == null) {
+                context.getSource().sendSystemMessage(Messages.error("Player not found: " + rawTarget));
+            } else {
+                targets.add(target);
+            }
+        }
+        return targets;
+    }
+
+    private static List<String> playerAndWildcardSuggestions(CommandContext<CommandSourceStack> context) {
+        List<String> suggestions = new ArrayList<>();
+        suggestions.add("*");
+        suggestions.add("all");
+        suggestions.addAll(context.getSource().getServer().getPlayerList().getPlayers().stream()
+            .map(ServerPlayer::getScoreboardName)
+            .toList());
+        return suggestions;
+    }
+
+    private static ServerLevel resolveLevel(CommandContext<CommandSourceStack> context, String rawLevel) {
+        Identifier identifier = Identifier.tryParse(rawLevel.contains(":") ? rawLevel : "minecraft:" + rawLevel);
+        if (identifier == null) {
+            return null;
+        }
+        ServerLevel level = context.getSource().getServer().getLevel(ResourceKey.create(Registries.DIMENSION, identifier));
+        if (level != null) {
+            return level;
+        }
+        String folded = rawLevel.toLowerCase(Locale.ROOT);
+        for (ServerLevel candidate : context.getSource().getServer().getAllLevels()) {
+            String id = candidate.dimension().identifier().toString();
+            if (id.equalsIgnoreCase(rawLevel) || candidate.dimension().identifier().getPath().equalsIgnoreCase(folded)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestRemoveRadiusOrWorld(
+        CommandContext<CommandSourceStack> context,
+        com.mojang.brigadier.suggestion.SuggestionsBuilder builder
+    ) {
+        List<String> suggestions = new ArrayList<>(List.of("16", "32", "64", "128"));
+        for (ServerLevel level : context.getSource().getServer().getAllLevels()) {
+            Identifier id = level.dimension().identifier();
+            suggestions.add(id.toString());
+            suggestions.add(id.getPath());
+        }
+        return SharedSuggestionProvider.suggest(suggestions, builder);
     }
 
     private static com.mojang.brigadier.suggestion.SuggestionProvider<CommandSourceStack> suggestPlayers() {

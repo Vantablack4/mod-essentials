@@ -85,13 +85,13 @@ final class EconomyService {
         BigDecimal next = switch (operation) {
             case GIVE -> current.add(amount);
             case TAKE -> current.subtract(amount);
-            case SET -> amount;
-            case RESET -> settings.startingBalance();
+            case SET -> settings.clamp(amount);
+            case RESET -> settings.clamp(settings.startingBalance());
         };
         if (operation == EcoOperation.TAKE && settings.wouldFallBelowMin(next)) {
             return new EcoResult(EcoStatus.BELOW_MINIMUM, target, current, settings.minMoney());
         }
-        if (settings.wouldExceedMax(next)) {
+        if (operation == EcoOperation.GIVE && settings.wouldExceedMax(next)) {
             return new EcoResult(EcoStatus.ABOVE_MAXIMUM, target, current, settings.maxMoney());
         }
         EconomyAccount updated = store.setBalance(target.uuid(), settings.clamp(next));

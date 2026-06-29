@@ -69,7 +69,7 @@ public final class EconomyCommands {
         EconomySettings settings = EconomySettings.load(configDirectory);
         EconomyService service = new EconomyService(settings, EconomyStore.load(configDirectory));
         registerAll(dispatcher, name -> balanceCommand(name, service, admin), "balance", "bal", "ebal", "ebalance", "money", "emoney");
-        registerAll(dispatcher, name -> balanceTopCommand(name, service), "balancetop", "ebalancetop", "baltop", "ebaltop");
+        registerAll(dispatcher, name -> balanceTopCommand(name, service, admin), "balancetop", "ebalancetop", "baltop", "ebaltop");
         registerAll(dispatcher, name -> payCommand(name, service), "pay", "epay");
         registerAll(dispatcher, name -> payToggleCommand(name, service, admin, forcedPayToggleState(name)), "paytoggle", "epaytoggle", "payoff", "epayoff", "payon", "epayon");
         registerAll(dispatcher, name -> payConfirmToggleCommand(name, service, forcedPayConfirmState(name)), "payconfirmtoggle", "epayconfirmtoggle", "payconfirmoff", "epayconfirmoff", "payconfirmon", "epayconfirmon", "payconfirm", "epayconfirm");
@@ -102,9 +102,16 @@ public final class EconomyCommands {
                 .executes(context -> balanceTarget(context, service)));
     }
 
-    private static LiteralArgumentBuilder<CommandSourceStack> balanceTopCommand(String name, EconomyService service) {
+    private static LiteralArgumentBuilder<CommandSourceStack> balanceTopCommand(
+        String name,
+        EconomyService service,
+        Predicate<CommandSourceStack> admin
+    ) {
         return Commands.literal(name)
             .executes(context -> balanceTop(context, service, 1))
+            .then(Commands.literal("force")
+                .requires(admin)
+                .executes(context -> balanceTop(context, service, 1)))
             .then(Commands.argument(PAGE_ARGUMENT, IntegerArgumentType.integer(1))
                 .executes(context -> balanceTop(context, service, getInteger(context, PAGE_ARGUMENT))));
     }
@@ -153,8 +160,8 @@ public final class EconomyCommands {
             .then(ecoAmountBranch("set", service, EconomyService.EcoOperation.SET))
             .then(Commands.literal("reset")
                 .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.greedyString())
-                    .suggests((context, builder) -> suggestAccounts(context, service, builder))
-                    .executes(context -> eco(context, service, EconomyService.EcoOperation.RESET, BigDecimal.ZERO))));
+                    .suggests((context, builder) -> suggestEcoTargets(context, service, builder))
+                    .executes(context -> eco(context, service, EconomyService.EcoOperation.RESET, new EcoAmount(BigDecimal.ZERO, false)))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> ecoAmountBranch(
@@ -164,10 +171,10 @@ public final class EconomyCommands {
     ) {
         return Commands.literal(name)
             .then(Commands.argument(TARGET_ARGUMENT, StringArgumentType.string())
-                .suggests((context, builder) -> suggestAccounts(context, service, builder))
+                .suggests((context, builder) -> suggestEcoTargets(context, service, builder))
                 .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
-                    .suggests(EconomyCommands::suggestAmounts)
-                    .executes(context -> eco(context, service, operation, parseAmount(context, AMOUNT_ARGUMENT, operation == EconomyService.EcoOperation.SET)))));
+                    .suggests(EconomyCommands::suggestEcoAmounts)
+                    .executes(context -> eco(context, service, operation))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> worthCommand(
@@ -179,20 +186,28 @@ public final class EconomyCommands {
             .executes(context -> worthHeld(context, service, null))
             .then(Commands.literal("hand")
                 .executes(context -> worthHeld(context, service, null))
-                .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer())
-                    .executes(context -> worthHeld(context, service, getInteger(context, AMOUNT_ARGUMENT)))))
+                .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
+                    .suggests(EconomyCommands::suggestItemAmounts)
+                    .executes(context -> worthHeld(context, service, parseItemAmount(context, 64)))))
             .then(Commands.literal("inventory")
+                .executes(context -> worthBulk(context, service, BulkMode.ALL, false)))
+            .then(Commands.literal("invent")
                 .executes(context -> worthBulk(context, service, BulkMode.ALL, false)))
             .then(Commands.literal("all")
                 .executes(context -> worthBulk(context, service, BulkMode.ALL, false)))
             .then(Commands.literal("blocks")
                 .executes(context -> worthBulk(context, service, BulkMode.BLOCKS, false))
-                .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer())
-                    .executes(context -> worthBulk(context, service, BulkMode.BLOCKS, false, getInteger(context, AMOUNT_ARGUMENT)))))
+                .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
+                    .suggests(EconomyCommands::suggestItemAmounts)
+                    .executes(context -> worthBulk(context, service, BulkMode.BLOCKS, false, parseItemAmount(context, 64)))))
             .then(Commands.argument(ITEM_ARGUMENT, ItemArgument.item(registryAccess))
                 .executes(context -> worthItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), null))
-                .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer())
-                    .executes(context -> worthItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), getInteger(context, AMOUNT_ARGUMENT)))));
+                .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
+                    .suggests(EconomyCommands::suggestItemAmounts)
+                    .executes(context -> {
+                        ItemStack probe = ItemArgument.getItem(context, ITEM_ARGUMENT).createItemStack(1);
+                        return worthItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), parseItemAmount(context, probe.getMaxStackSize()));
+                    })));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> setWorthCommand(
@@ -204,11 +219,12 @@ public final class EconomyCommands {
         return Commands.literal(name)
             .requires(admin)
             .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
-                .executes(context -> setWorthHeld(context, service, parseAmount(context, AMOUNT_ARGUMENT, true))))
+                .suggests(EconomyCommands::suggestAmounts)
+                .executes(context -> setWorthHeld(context, service)))
             .then(Commands.argument(ITEM_ARGUMENT, ItemArgument.item(registryAccess))
                 .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
                     .suggests(EconomyCommands::suggestAmounts)
-                    .executes(context -> setWorthItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), parseAmount(context, AMOUNT_ARGUMENT, true)))));
+                    .executes(context -> setWorthItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT)))));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> sellCommand(
@@ -219,20 +235,28 @@ public final class EconomyCommands {
         return Commands.literal(name)
             .then(Commands.literal("hand")
                 .executes(context -> sellHeld(context, service, null))
-                .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer())
-                    .executes(context -> sellHeld(context, service, getInteger(context, AMOUNT_ARGUMENT)))))
+                .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
+                    .suggests(EconomyCommands::suggestItemAmounts)
+                    .executes(context -> sellHeld(context, service, parseItemAmount(context, 64)))))
             .then(Commands.literal("inventory")
+                .executes(context -> sellBulk(context, service, BulkMode.ALL)))
+            .then(Commands.literal("invent")
                 .executes(context -> sellBulk(context, service, BulkMode.ALL)))
             .then(Commands.literal("all")
                 .executes(context -> sellBulk(context, service, BulkMode.ALL)))
             .then(Commands.literal("blocks")
                 .executes(context -> sellBulk(context, service, BulkMode.BLOCKS))
-                .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer())
-                    .executes(context -> sellBulk(context, service, BulkMode.BLOCKS, getInteger(context, AMOUNT_ARGUMENT)))))
+                .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
+                    .suggests(EconomyCommands::suggestItemAmounts)
+                    .executes(context -> sellBulk(context, service, BulkMode.BLOCKS, parseItemAmount(context, 64)))))
             .then(Commands.argument(ITEM_ARGUMENT, ItemArgument.item(registryAccess))
                 .executes(context -> sellItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), null))
-                .then(Commands.argument(AMOUNT_ARGUMENT, IntegerArgumentType.integer())
-                    .executes(context -> sellItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), getInteger(context, AMOUNT_ARGUMENT)))));
+                .then(Commands.argument(AMOUNT_ARGUMENT, StringArgumentType.word())
+                    .suggests(EconomyCommands::suggestItemAmounts)
+                    .executes(context -> {
+                        ItemStack probe = ItemArgument.getItem(context, ITEM_ARGUMENT).createItemStack(1);
+                        return sellItem(context, service, ItemArgument.getItem(context, ITEM_ARGUMENT), parseItemAmount(context, probe.getMaxStackSize()));
+                    })));
     }
 
     private static int balanceSelf(CommandContext<CommandSourceStack> context, EconomyService service) throws CommandSyntaxException {
@@ -277,7 +301,11 @@ public final class EconomyCommands {
             context.getSource().sendSystemMessage(tl("payOffline", "You cannot pay offline users."));
             return 0;
         }
-        BigDecimal amount = parseAmount(context, AMOUNT_ARGUMENT, false);
+        Optional<BigDecimal> parsedAmount = parseAmount(context.getSource(), getString(context, AMOUNT_ARGUMENT), false, false);
+        if (parsedAmount.isEmpty()) {
+            return 0;
+        }
+        BigDecimal amount = parsedAmount.get();
         EconomyService.TransferResult result = service.pay(payer, receiver, amount, "/" + commandName + " " + rawTarget + " " + amount.stripTrailingZeros().toPlainString());
         switch (result.status()) {
             case SUCCESS -> {
@@ -290,10 +318,10 @@ public final class EconomyCommands {
                 return 0;
             }
             case BELOW_MINIMUM_PAY -> payer.sendSystemMessage(tl("minimumPayAmount", "The minimum amount you can pay is {0}.", money(service, service.settings().minimumPayAmount())));
-            case INSUFFICIENT_FUNDS -> payer.sendSystemMessage(Messages.error("Insufficient funds."));
+            case INSUFFICIENT_FUNDS -> payer.sendSystemMessage(tl("notEnoughMoney", "You do not have sufficient funds."));
             case RECEIVER_NOT_ACCEPTING -> payer.sendSystemMessage(tl("notAcceptingPay", "{0} is not accepting payment.", result.receiver().listedName()));
             case RECEIVER_WOULD_EXCEED_MAX -> payer.sendSystemMessage(tl("maxMoney", "This transaction would exceed the balance limit for this account."));
-            case SELF -> payer.sendSystemMessage(Messages.error("You cannot pay yourself."));
+            case SELF -> payer.sendSystemMessage(tl("errorWithMessage", "Error: {0}", "You cannot pay yourself."));
         }
         return 0;
     }
@@ -329,33 +357,61 @@ public final class EconomyCommands {
     private static int eco(
         CommandContext<CommandSourceStack> context,
         EconomyService service,
+        EconomyService.EcoOperation operation
+    ) {
+        Optional<EcoAmount> parsedAmount = parseEcoAmount(context.getSource(), getString(context, AMOUNT_ARGUMENT), operation == EconomyService.EcoOperation.SET);
+        if (parsedAmount.isEmpty()) {
+            return 0;
+        }
+        return eco(context, service, operation, parsedAmount.get());
+    }
+
+    private static int eco(
+        CommandContext<CommandSourceStack> context,
+        EconomyService service,
         EconomyService.EcoOperation operation,
-        BigDecimal amount
+        EcoAmount amount
     ) {
         String rawTarget = getString(context, TARGET_ARGUMENT);
-        Optional<EconomyAccount> target = service.resolveAccount(context.getSource().getServer(), rawTarget);
-        if (target.isEmpty()) {
+        List<EconomyAccount> targets = resolveEcoTargets(context.getSource().getServer(), service, rawTarget);
+        if (targets.isEmpty()) {
             context.getSource().sendSystemMessage(tl("playerNotFound", "Player not found."));
             return 0;
         }
 
-        EconomyService.EcoResult result = service.eco(target.get(), operation, amount);
-        if (result.status() == EconomyService.EcoStatus.BELOW_MINIMUM) {
-            context.getSource().sendSystemMessage(tl("minimumBalanceError", "The minimum balance a user can have is {0}.", money(service, service.settings().minMoney())));
-            return 0;
-        }
-        if (result.status() == EconomyService.EcoStatus.ABOVE_MAXIMUM) {
-            context.getSource().sendSystemMessage(tl("maxMoney", "This transaction would exceed the balance limit for this account."));
-            return 0;
-        }
+        int changed = 0;
+        for (EconomyAccount target : targets) {
+            BigDecimal effectiveAmount = amount.percent()
+                ? target.balance().multiply(amount.value()).scaleByPowerOfTen(-2)
+                : amount.value();
+            EconomyService.EcoResult result = service.eco(target, operation, effectiveAmount);
+            if (result.status() == EconomyService.EcoStatus.BELOW_MINIMUM) {
+                context.getSource().sendSystemMessage(tl("minimumBalanceError", "The minimum balance a user can have is {0}.", money(service, service.settings().minMoney())));
+                continue;
+            }
+            if (result.status() == EconomyService.EcoStatus.ABOVE_MAXIMUM) {
+                context.getSource().sendSystemMessage(tl("maxMoney", "This transaction would exceed the balance limit for this account."));
+                continue;
+            }
 
-        EconomyAccount updated = result.account();
-        switch (operation) {
-            case GIVE -> context.getSource().sendSystemMessage(tl("addedToOthersAccount", "{0} added to {1} account. New balance: {2}", money(service, amount), updated.listedName(), money(service, updated.balance())));
-            case TAKE -> context.getSource().sendSystemMessage(tl("takenFromOthersAccount", "{0} taken from {1} account. New balance: {2}", money(service, amount), updated.listedName(), money(service, updated.balance())));
-            case SET, RESET -> context.getSource().sendSystemMessage(tl("setBalOthers", "You set {0}'s balance to {1}.", updated.listedName(), money(service, updated.balance())));
+            EconomyAccount updated = result.account();
+            switch (operation) {
+                case GIVE -> {
+                    context.getSource().sendSystemMessage(tl("addedToOthersAccount", "{0} added to {1} account. New balance: {2}", money(service, effectiveAmount), updated.listedName(), money(service, updated.balance())));
+                    sendEcoTargetMessage(context.getSource().getServer(), updated, tl("addedToAccount", "{0} has been added to your account.", money(service, effectiveAmount)));
+                }
+                case TAKE -> {
+                    context.getSource().sendSystemMessage(tl("takenFromOthersAccount", "{0} taken from {1} account. New balance: {2}", money(service, effectiveAmount), updated.listedName(), money(service, updated.balance())));
+                    sendEcoTargetMessage(context.getSource().getServer(), updated, tl("takenFromAccount", "{0} has been taken from your account.", money(service, effectiveAmount)));
+                }
+                case SET, RESET -> {
+                    context.getSource().sendSystemMessage(tl("setBalOthers", "You set {0}'s balance to {1}.", updated.listedName(), money(service, updated.balance())));
+                    sendEcoTargetMessage(context.getSource().getServer(), updated, tl("setBal", "Your balance was set to {0}.", money(service, updated.balance())));
+                }
+            }
+            changed++;
         }
-        return 1;
+        return changed;
     }
 
     private static int worthHeld(CommandContext<CommandSourceStack> context, EconomyService service, Integer requestedAmount) throws CommandSyntaxException {
@@ -402,14 +458,18 @@ public final class EconomyCommands {
         return scan.totalCount();
     }
 
-    private static int setWorthHeld(CommandContext<CommandSourceStack> context, EconomyService service, BigDecimal amount) throws CommandSyntaxException {
+    private static int setWorthHeld(CommandContext<CommandSourceStack> context, EconomyService service) throws CommandSyntaxException {
+        Optional<BigDecimal> parsedAmount = parseAmount(context.getSource(), getString(context, AMOUNT_ARGUMENT), true, false);
+        if (parsedAmount.isEmpty()) {
+            return 0;
+        }
         ServerPlayer player = context.getSource().getPlayerOrException();
         ItemStack stack = player.getMainHandItem();
         if (stack.isEmpty()) {
             context.getSource().sendSystemMessage(tl("itemSellAir", "You really tried to sell Air? Put an item in your hand."));
             return 0;
         }
-        service.store().setWorth(itemId(stack), amount);
+        service.store().setWorth(itemId(stack), parsedAmount.get());
         context.getSource().sendSystemMessage(tl("worthSet", "Worth value set"));
         return 1;
     }
@@ -417,11 +477,14 @@ public final class EconomyCommands {
     private static int setWorthItem(
         CommandContext<CommandSourceStack> context,
         EconomyService service,
-        ItemInput itemInput,
-        BigDecimal amount
+        ItemInput itemInput
     ) throws CommandSyntaxException {
+        Optional<BigDecimal> parsedAmount = parseAmount(context.getSource(), getString(context, AMOUNT_ARGUMENT), true, false);
+        if (parsedAmount.isEmpty()) {
+            return 0;
+        }
         ItemStack probe = itemInput.createItemStack(1);
-        service.store().setWorth(itemId(probe), amount);
+        service.store().setWorth(itemId(probe), parsedAmount.get());
         context.getSource().sendSystemMessage(tl("worthSet", "Worth value set"));
         return 1;
     }
@@ -679,10 +742,44 @@ public final class EconomyCommands {
         }
     }
 
-    private static BigDecimal parseAmount(CommandContext<CommandSourceStack> context, String argumentName, boolean allowZero) {
-        String rawValue = getString(context, argumentName);
+    private static List<EconomyAccount> resolveEcoTargets(MinecraftServer server, EconomyService service, String rawTarget) {
+        String target = EconomyPlayerLookup.cleanInput(rawTarget);
+        if (target.equals("**")) {
+            return service.store().accounts();
+        }
+        if (target.equals("*")) {
+            return server.getPlayerList().getPlayers().stream()
+                .map(service::account)
+                .toList();
+        }
+        return service.resolveAccount(server, rawTarget)
+            .map(List::of)
+            .orElseGet(List::of);
+    }
+
+    private static void sendEcoTargetMessage(MinecraftServer server, EconomyAccount target, Component message) {
+        ServerPlayer onlineTarget = server.getPlayerList().getPlayer(target.uuid());
+        if (onlineTarget != null) {
+            onlineTarget.sendSystemMessage(message);
+        }
+    }
+
+    private static Optional<EcoAmount> parseEcoAmount(CommandSourceStack source, String rawValue, boolean allowNegative) {
+        String trimmed = rawValue.trim();
+        boolean percent = trimmed.endsWith("%");
+        String number = percent ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
+        return parseAmount(source, number, true, allowNegative)
+            .map(value -> new EcoAmount(value, percent));
+    }
+
+    private static Optional<BigDecimal> parseAmount(
+        CommandSourceStack source,
+        String rawValue,
+        boolean allowZero,
+        boolean allowNegative
+    ) {
         String sanitized = rawValue
-            .replace(context.getSource().getServer() == null ? "$" : "$", "")
+            .replace("$", "")
             .replace(",", "")
             .trim();
         if (sanitized.startsWith("+")) {
@@ -692,10 +789,39 @@ public final class EconomyCommands {
         try {
             amount = new BigDecimal(sanitized);
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("Invalid amount: " + rawValue, exception);
+            source.sendSystemMessage(tl("invalidNumber", "Invalid Number."));
+            return Optional.empty();
         }
-        if (allowZero ? amount.signum() < 0 : amount.signum() <= 0) {
-            throw new IllegalArgumentException("Amount must be " + (allowZero ? "zero or positive" : "positive") + ": " + rawValue);
+        if (!allowNegative && amount.signum() < 0) {
+            source.sendSystemMessage(tl("payMustBePositive", "Amount to pay must be positive."));
+            return Optional.empty();
+        }
+        if (!allowZero && amount.signum() == 0) {
+            source.sendSystemMessage(tl("payMustBePositive", "Amount to pay must be positive."));
+            return Optional.empty();
+        }
+        return Optional.of(amount);
+    }
+
+    private static int parseItemAmount(CommandContext<CommandSourceStack> context, int stackSize) {
+        String rawValue = getString(context, AMOUNT_ARGUMENT).trim();
+        String digits = rawValue.replaceAll("[^0-9]", "");
+        if (digits.isBlank()) {
+            context.getSource().sendSystemMessage(tl("invalidNumber", "Invalid Number."));
+            return 0;
+        }
+        int amount;
+        try {
+            amount = Integer.parseInt(digits);
+        } catch (NumberFormatException exception) {
+            context.getSource().sendSystemMessage(tl("invalidNumber", "Invalid Number."));
+            return 0;
+        }
+        if (rawValue.startsWith("-")) {
+            amount = -amount;
+        }
+        if (rawValue.toLowerCase(Locale.ROOT).endsWith("s")) {
+            amount *= Math.max(1, stackSize);
         }
         return amount;
     }
@@ -743,8 +869,34 @@ public final class EconomyCommands {
         return SharedSuggestionProvider.suggest(suggestions, builder);
     }
 
+    private static CompletableFuture<Suggestions> suggestEcoTargets(
+        CommandContext<CommandSourceStack> context,
+        EconomyService service,
+        SuggestionsBuilder builder
+    ) {
+        Set<String> suggestions = new LinkedHashSet<>();
+        suggestions.add("*");
+        suggestions.add("**");
+        suggestions.addAll(EconomyPlayerLookup.onlineSuggestions(context.getSource().getServer()));
+        for (EconomyAccount account : service.store().accounts()) {
+            suggestions.add(account.accountName());
+            if (!account.displayName().equals(account.accountName())) {
+                suggestions.add(account.displayName().contains(" ") ? "\"" + account.displayName().replace("\"", "\\\"") + "\"" : account.displayName());
+            }
+        }
+        return SharedSuggestionProvider.suggest(suggestions, builder);
+    }
+
     private static CompletableFuture<Suggestions> suggestAmounts(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         return SharedSuggestionProvider.suggest(List.of("1", "10", "100", "1000").stream(), builder);
+    }
+
+    private static CompletableFuture<Suggestions> suggestEcoAmounts(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(List.of("0", "1", "10", "100", "1000", "10%", "50%", "100%").stream(), builder);
+    }
+
+    private static CompletableFuture<Suggestions> suggestItemAmounts(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(List.of("1", "64", "1s", "-1").stream(), builder);
     }
 
     private static Boolean forcedPayToggleState(String commandName) {
@@ -776,6 +928,9 @@ public final class EconomyCommands {
     }
 
     private record SellScan(Map<Item, Integer> itemCounts, BigDecimal totalWorth, int totalCount) {
+    }
+
+    private record EcoAmount(BigDecimal value, boolean percent) {
     }
 
     @FunctionalInterface

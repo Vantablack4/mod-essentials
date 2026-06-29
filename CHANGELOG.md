@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0
+
+- Added another EssentialsX parity pass over command behavior and messages:
+  player-qualified `/home player:name` and `/delhome player:name`, paged
+  `/warp`/`/warps`, persistent `/tptoggle` and `/tpauto`, richer `/tppos`
+  yaw/pitch/dimension syntax, clear-inventory wildcard/item/amount filters,
+  and optional dimension syntax for weather aliases.
+- Expanded economy, mail/social, admin/offline, item, player, and world command
+  compatibility, including `/balancetop force`, wildcard `/eco`, timed mail,
+  `/tpoffline`, `/banip` remembered-player IP targeting, `/book` sign/unsign,
+  `/itemname` no-arg clear, `/ptime` and `/pweather` list/show forms,
+  `/condense <item>`, `/unlimited ... [player]`, richer `/fireball`,
+  upstream-style `/nuke`, `/editsign copy|paste`, and broader `/remove`
+  categories.
+- Bundled the remaining upstream EssentialsX default resources under
+  `src/main/resources/essentialsx`: MOTD, rules, info, custom text, book,
+  kits, TPR, worth, item database, custom items, and release marker.
+- Updated parity tooling to separate syntax-only Brigadier usage differences
+  from remaining behavior/platform gaps.
+
 ## 0.2.0
 
 - Expanded the Fabric command surface to cover all upstream EssentialsX command
